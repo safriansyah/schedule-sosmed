@@ -8,4 +8,9 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
-Schedule::command('app:auto-post')->everyMinute();
+// Run the command in-process (via Artisan::call) instead of spawning a
+// subprocess. Many shared hosts disable proc_open, which Schedule::command()
+// requires — this avoids that limitation entirely.
+Schedule::call(function () {
+    Artisan::call('app:auto-post');
+})->everyMinute();
