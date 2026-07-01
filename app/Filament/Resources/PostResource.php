@@ -34,7 +34,10 @@ class PostResource extends Resource
                             ->label('Image / Video')
                             ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime'])
                             ->maxSize(102400) // 100 MB
-                            ->helperText('Gambar (JPG/PNG/WebP) atau video (MP4/MOV). Video akan diposting sebagai Reels di Instagram.'),
+                            ->imageEditor()
+                            ->imageEditorAspectRatios(['1:1', '4:5', '1.91:1'])
+                            ->helperText('Gambar: rasio 4:5–1.91:1 (mis. 1:1, 4:5, 1.91:1). Video (MP4/MOV) diposting sebagai Reels. Klik ikon pensil untuk crop rasio.')
+                            ->rules([new \App\Rules\InstagramAspectRatio()]),
                         Forms\Components\TextInput::make('site_url')
                             ->maxLength(255) // Individual max length, but dynamically validated
                             ->placeholder('Add a site URL e.g https://example.com')

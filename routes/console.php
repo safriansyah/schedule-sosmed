@@ -8,4 +8,4 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
-Schedule::command('app:auto-post')->everyMinute()->withoutOverlapping(10);
+Schedule::command('app:auto-post')->everyMinute();
