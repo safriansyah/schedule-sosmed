@@ -35,4 +35,22 @@ return [
         ],
     ],
 
+    /*
+    | Unofficial Instagram comment viewer (dolphinradar). The official Graph
+    | API only returns comment text once the app has Advanced Access, so this
+    | public viewer is used as a best-effort fallback to read comments on our
+    | own posts. It is unofficial and may change or stop without notice — the
+    | sync is written to fail quietly and never break the app.
+    */
+    'dolphinradar' => [
+        'base_url' => env('DOLPHINRADAR_URL', 'https://www.dolphinradar.com'),
+        'tenant_id' => env('DOLPHINRADAR_TENANT', '6'),
+        'timezone' => env('DOLPHINRADAR_TZ', 'Asia/Jakarta'),
+        // Only sync comments for posts newer than this many days (comments
+        // arrive mostly on recent posts); 0 = no age limit.
+        'max_age_days' => (int) env('DOLPHINRADAR_MAX_AGE_DAYS', 120),
+        // Hard cap on posts hit per account per run, to stay polite.
+        'max_posts' => (int) env('DOLPHINRADAR_MAX_POSTS', 40),
+    ],
+
 ];

@@ -1,0 +1,91 @@
+@php $user = $user ?? null; @endphp
+
+<div class="mx-auto max-w-2xl space-y-6">
+
+    <div class="card p-6">
+        <p class="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Identitas</p>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+                <label for="name" class="label">Nama <span class="text-rose-500">*</span></label>
+                <input id="name" name="name" required maxlength="120" value="{{ old('name', $user?->name) }}"
+                       class="input @error('name') border-rose-400 @enderror" placeholder="Nama lengkap">
+                @error('name') <p class="form-error">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <label for="phone" class="label">Telepon</label>
+                <input id="phone" name="phone" maxlength="32" value="{{ old('phone', $user?->phone) }}"
+                       class="input" placeholder="08xxxxxxxxxx">
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <label for="email" class="label">Email <span class="text-rose-500">*</span></label>
+            <input id="email" name="email" type="email" required value="{{ old('email', $user?->email) }}"
+                   class="input @error('email') border-rose-400 @enderror" placeholder="nama@perusahaan.com">
+            @error('email') <p class="form-error">{{ $message }}</p> @enderror
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <p class="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Hak Akses</p>
+
+        <label class="label">Role <span class="text-rose-500">*</span></label>
+        <div class="space-y-2">
+            @foreach ($roles as $role)
+                <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
+                    <input type="radio" name="role_id" value="{{ $role->id }}" required
+                           @checked((int) old('role_id', $user?->role_id) === $role->id)
+                           class="mt-0.5 h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500/40 dark:border-white/20 dark:bg-ink-850">
+                    <span class="min-w-0 flex-1">
+                        <span class="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                            <x-icon :name="$role->name->icon()" class="h-4 w-4 text-slate-400"/>
+                            {{ $role->label }}
+                        </span>
+                        <span class="mt-0.5 block text-xs text-slate-400">{{ $role->description }}</span>
+                    </span>
+                </label>
+            @endforeach
+        </div>
+        @error('role_id') <p class="form-error">{{ $message }}</p> @enderror
+
+        <label class="mt-4 flex cursor-pointer items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $user?->is_active ?? true))
+                   class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40 dark:border-white/20 dark:bg-ink-850">
+            Akun aktif — bisa login
+        </label>
+        @if ($user && $user->is(auth()->user()))
+            <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">Anda tidak dapat menonaktifkan akun sendiri.</p>
+        @endif
+    </div>
+
+    <div class="card p-6">
+        <p class="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Kata Sandi</p>
+        <p class="mb-4 text-xs text-slate-400">
+            {{ $user ? 'Kosongkan bila tidak ingin mengubah kata sandi.' : 'Minimal 8 karakter, mengandung huruf dan angka.' }}
+        </p>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+                <label for="password" class="label">Kata sandi @unless ($user) <span class="text-rose-500">*</span> @endunless</label>
+                <input id="password" name="password" type="password" autocomplete="new-password"
+                       class="input @error('password') border-rose-400 @enderror" placeholder="••••••••">
+                @error('password') <p class="form-error">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <label for="password_confirmation" class="label">Ulangi kata sandi</label>
+                <input id="password_confirmation" name="password_confirmation" type="password"
+                       autocomplete="new-password" class="input" placeholder="••••••••">
+            </div>
+        </div>
+    </div>
+
+    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <a href="{{ route('users.index') }}" class="btn-outline">Batal</a>
+        <button type="submit" class="btn-primary">
+            <x-icon name="check" class="h-4 w-4"/> Simpan
+        </button>
+    </div>
+</div>

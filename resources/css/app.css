@@ -1,3 +1,214 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'cropperjs/dist/cropper.css';
+
+/* Class-based dark mode (toggle `.dark` on <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Brand — violet/indigo, modern social SaaS */
+    --color-brand-50: #f5f3ff;
+    --color-brand-100: #ede9fe;
+    --color-brand-200: #ddd6fe;
+    --color-brand-300: #c4b5fd;
+    --color-brand-400: #a78bfa;
+    --color-brand-500: #8b5cf6;
+    --color-brand-600: #7c3aed;
+    --color-brand-700: #6d28d9;
+    --color-brand-800: #5b21b6;
+    --color-brand-900: #4c1d95;
+
+    --color-accent-400: #22d3ee;
+    --color-accent-500: #06b6d4;
+
+    /* Dark surface tokens */
+    --color-ink-950: #08080f;
+    --color-ink-900: #0d0d18;
+    --color-ink-850: #141527;
+    --color-ink-800: #1a1b31;
+
+    /* Social platform brand colors (badges, charts, icons) */
+    --color-ig-500: #e1306c;
+    --color-ig-400: #f56040;
+    --color-fb-500: #1877f2;
+    --color-tiktok-500: #00f2ea;
+    --color-yt-500: #ff0000;
+    --color-x-500: #0f172a;
+    --color-li-500: #0a66c2;
+    --color-wa-500: #25d366;
+
+    --animate-shimmer: shimmer 1.6s linear infinite;
+}
+
+@keyframes shimmer {
+    0%   { background-position: -800px 0; }
+    100% { background-position: 800px 0; }
+}
+@keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgb(139 92 246 / 0.45); }
+    100% { box-shadow: 0 0 0 12px rgb(139 92 246 / 0); }
+}
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+        -webkit-tap-highlight-color: transparent;
+    }
+    body {
+        @apply bg-slate-50 text-slate-700 antialiased;
+        @apply dark:bg-ink-950 dark:text-slate-300;
+    }
+    [x-cloak] { display: none !important; }
+
+    /* Thin premium scrollbars */
+    * { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / 0.4) transparent; }
+    *::-webkit-scrollbar { width: 8px; height: 8px; }
+    *::-webkit-scrollbar-thumb {
+        background: rgb(148 163 184 / 0.4);
+        border-radius: 9999px;
+    }
+    *::-webkit-scrollbar-thumb:hover { background: rgb(148 163 184 / 0.7); }
+}
+
+/* ---------------------------------------------------------------------------
+ | Surfaces
+ * ------------------------------------------------------------------------- */
+@utility glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/60 shadow-sm;
+    @apply dark:bg-white/[0.04] dark:border-white/[0.08];
+}
+@utility card {
+    @apply rounded-2xl bg-white border border-slate-200/70 shadow-sm;
+    @apply dark:bg-ink-900 dark:border-white/[0.06];
+}
+@utility card-glow {
+    @apply rounded-2xl border border-slate-200/70 bg-white shadow-sm transition;
+    @apply dark:bg-ink-900 dark:border-white/[0.06];
+    &:hover { @apply -translate-y-0.5 shadow-md; }
+}
+
+/* ---------------------------------------------------------------------------
+ | Buttons
+ * ------------------------------------------------------------------------- */
+@utility btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5
+           text-sm font-semibold transition select-none focus:outline-none
+           focus-visible:ring-2 focus-visible:ring-brand-500/60
+           disabled:opacity-50 disabled:pointer-events-none;
+}
+@utility btn-primary {
+    @apply btn text-white bg-brand-600 hover:bg-brand-500 active:scale-[0.98]
+           shadow-[0_8px_20px_-8px_rgb(124_58_237/0.7)];
+}
+@utility btn-ghost {
+    @apply btn text-slate-600 hover:bg-slate-100
+           dark:text-slate-300 dark:hover:bg-white/5;
+}
+@utility btn-outline {
+    @apply btn border border-slate-200 text-slate-700 hover:bg-slate-50
+           dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5;
+}
+@utility btn-danger {
+    @apply btn text-white bg-rose-600 hover:bg-rose-500 active:scale-[0.98];
+}
+@utility btn-success {
+    @apply btn text-white bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98];
+}
+@utility btn-sm { @apply px-3 py-1.5 text-xs rounded-lg; }
+
+/* ---------------------------------------------------------------------------
+ | Forms
+ * ------------------------------------------------------------------------- */
+@utility input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm
+           text-slate-700 placeholder:text-slate-400 transition
+           focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 focus:outline-none
+           dark:bg-ink-850 dark:border-white/10 dark:text-slate-200 dark:placeholder:text-slate-500;
+}
+@utility label {
+    @apply mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-400;
+}
+@utility form-error {
+    @apply mt-1.5 text-xs font-medium text-rose-500;
+}
+
+/* ---------------------------------------------------------------------------
+ | Badges — generic tones (workflow statuses map onto these)
+ * ------------------------------------------------------------------------- */
+@utility badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+}
+@utility badge-green  { @apply badge bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400; }
+@utility badge-red    { @apply badge bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400; }
+@utility badge-blue   { @apply badge bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300; }
+@utility badge-amber  { @apply badge bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400; }
+@utility badge-slate  { @apply badge bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-400; }
+@utility badge-cyan   { @apply badge bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400; }
+@utility badge-violet { @apply badge bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300; }
+@utility badge-pink   { @apply badge bg-pink-50 text-pink-600 dark:bg-pink-500/10 dark:text-pink-400; }
+
+/* ---------------------------------------------------------------------------
+ | Navigation
+ * ------------------------------------------------------------------------- */
+@utility nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium
+           text-slate-500 transition hover:bg-slate-100 hover:text-slate-900
+           dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white;
+}
+@utility nav-link-active {
+    @apply bg-brand-600 text-white shadow-[0_8px_20px_-10px_rgb(124_58_237/0.8)]
+           hover:bg-brand-600 hover:text-white
+           dark:bg-brand-600 dark:text-white dark:hover:bg-brand-600;
+}
+@utility nav-section {
+    @apply px-3.5 pt-5 pb-1 text-[10px] font-bold uppercase tracking-widest
+           text-slate-400 dark:text-slate-600;
+}
+
+/* ---------------------------------------------------------------------------
+ | Tables
+ * ------------------------------------------------------------------------- */
+@utility th {
+    @apply px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider
+           text-slate-400 dark:text-slate-500;
+}
+@utility td {
+    @apply px-4 py-3 text-sm text-slate-600 dark:text-slate-300;
+}
+@utility row-hover {
+    @apply transition hover:bg-slate-50/80 dark:hover:bg-white/[0.03];
+}
+
+/* ---------------------------------------------------------------------------
+ | Feedback & misc
+ * ------------------------------------------------------------------------- */
+@utility skeleton {
+    @apply rounded-md bg-slate-200/70 dark:bg-white/5;
+    background-image: linear-gradient(90deg,
+        transparent 0, rgb(255 255 255 / 0.35) 50%, transparent 100%);
+    background-size: 800px 100%;
+    animation: var(--animate-shimmer);
+}
+@utility avatar {
+    @apply grid place-items-center rounded-full bg-brand-100 font-bold text-brand-700
+           dark:bg-brand-500/20 dark:text-brand-300 shrink-0;
+}
+@utility live-dot {
+    @apply inline-block h-2 w-2 rounded-full bg-brand-500;
+    animation: pulse-ring 1.8s ease-out infinite;
+}

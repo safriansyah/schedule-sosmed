@@ -1,0 +1,13 @@
+Untuk Schedule Sosmed
+
+admin@example.com        | Super Admin            | aktif
+direktur@example.com     | Direktur               | aktif
+curator1@example.com     | Approval / Curator     | aktif
+curator2@example.com     | Approval / Curator     | aktif
+verifikator1@example.com | Tim Verifikasi         | aktif
+verifikator2@example.com | Tim Verifikasi         | aktif
+creative1@example.com    | Tim Creative           | aktif
+creative2@example.com    | Tim Creative           | aktif
+creative3@example.com    | Tim Creative           | aktif
+
+* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1

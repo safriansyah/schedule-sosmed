@@ -1,0 +1,260 @@
+<?php
+
+namespace App\Services\Publishing;
+
+use App\Enums\SocialPlatform;
+use App\Models\AccountMedia;
+use App\Models\MediaComment;
+use App\Models\MediaMetric;
+use App\Models\Schedule;
+use App\Models\SocialAccount;
+use Generator;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
+use Throwable;
+
+/**
+ * Pulls each account's posts and their insight totals, then writes one
+ * snapshot row per post per day.
+ *
+ * Instagram reports insights as *lifetime* totals, so the daily snapshots are
+ * what let MetricsComparison derive growth over any window.
+ */
+class InstagramInsightsSync
+{
+    private const API = 'https://graph.instagram.com/v21.0';
+
+    /** Insight metrics requested per post. */
+    private const MEDIA_METRICS = 'reach,saved,shares,likes,comments,views,total_interactions';
+
+    /** Posts fetched per API page. */
+    private const PAGE_SIZE = 50;
+
+    /** Hard ceiling on pages walked per run, so one account cannot hog the run. */
+    private const MAX_PAGES = 40;   // 40 × 50 = 2000 posts
+
+    /**
+     * Insights cost one API call per post, and Instagram rate-limits hard.
+     * Posts older than this are refreshed less often — their numbers have
+     * usually settled, while recent posts are still moving.
+     */
+    private const HOT_DAYS = 30;
+
+    /** How often a settled (older) post is refreshed. */
+    private const COLD_REFRESH_DAYS = 7;
+
+    /** Comments pulled per post per run. */
+    private const COMMENT_LIMIT = 25;
+
+    /**
+     * @return array{media: int, snapshots: int, failed: int}
+     */
+    public function syncAll(): array
+    {
+        $totals = ['media' => 0, 'snapshots' => 0, 'failed' => 0];
+
+        foreach (SocialAccount::active()->get() as $account) {
+            if ($account->platform !== SocialPlatform::Instagram) {
+                continue;
+            }
+
+            try {
+                $result = $this->sync($account);
+                $totals['media'] += $result['media'];
+                $totals['snapshots'] += $result['snapshots'];
+            } catch (Throwable $e) {
+                $totals['failed']++;
+                Log::warning("Gagal sinkron insight {$account->name}: ".$e->getMessage());
+            }
+        }
+
+        return $totals;
+    }
+
+    /**
+     * @return array{media: int, snapshots: int}
+     */
+    public function sync(SocialAccount $account): array
+    {
+        if (blank($account->access_token)) {
+            throw new RuntimeException('Access token belum diisi.');
+        }
+
+        $client = Http::withToken($account->access_token)->timeout(30)->baseUrl(self::API);
+
+        $seen = 0;
+        $snapshots = 0;
+
+        foreach ($this->walkMedia($client) as $post) {
+            $seen++;
+            $media = $this->storeMedia($account, $post);
+
+            // Skip the expensive insights call for posts whose numbers have
+            // already settled and were refreshed recently.
+            if (! $this->needsRefresh($media)) {
+                continue;
+            }
+
+            if ($this->storeInsights($client, $media)) {
+                $snapshots++;
+            }
+
+            $this->storeComments($client, $media);
+        }
+
+        return ['media' => $seen, 'snapshots' => $snapshots];
+    }
+
+    /**
+     * Walk every page of the media list, yielding one post at a time so a
+     * 1000-post account never sits in memory at once.
+     *
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function walkMedia(PendingRequest $client): Generator
+    {
+        $url = '/me/media';
+        $params = [
+            'fields' => 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count',
+            'limit' => self::PAGE_SIZE,
+        ];
+
+        for ($page = 0; $page < self::MAX_PAGES && $url !== null; $page++) {
+            // `paging.next` is already a full, signed URL — send it as-is.
+            $response = $page === 0
+                ? $client->get($url, $params)
+                : Http::timeout(30)->get($url);
+
+            if ($response->failed()) {
+                throw new RuntimeException('Gagal mengambil daftar media: '.str($response->body())->limit(160));
+            }
+
+            foreach ($response->json('data', []) as $post) {
+                yield $post;
+            }
+
+            $url = $response->json('paging.next');
+        }
+    }
+
+    /**
+     * Recent posts are refreshed every run; settled ones only weekly. Insights
+     * cost one API call per post, so this keeps large accounts within quota.
+     */
+    private function needsRefresh(AccountMedia $media): bool
+    {
+        $isHot = $media->posted_at === null
+            || $media->posted_at->gt(now()->subDays(self::HOT_DAYS));
+
+        if ($isHot) {
+            return true;
+        }
+
+        $last = $media->metrics()->max('captured_at');
+
+        return $last === null || Carbon::parse($last)->lt(now()->subDays(self::COLD_REFRESH_DAYS));
+    }
+
+    /** @param array<string, mixed> $post */
+    private function storeMedia(SocialAccount $account, array $post): AccountMedia
+    {
+        // Attribute the post to our own content when we published it.
+        $contentId = Schedule::where('social_account_id', $account->id)
+            ->where('external_id', $post['id'])
+            ->value('content_id');
+
+        return AccountMedia::updateOrCreate(
+            ['social_account_id' => $account->id, 'external_id' => $post['id']],
+            [
+                'content_id' => $contentId,
+                'caption' => $post['caption'] ?? null,
+                'media_type' => $post['media_type'] ?? null,
+                'product_type' => $post['media_product_type'] ?? null,
+                'permalink' => $post['permalink'] ?? null,
+                'thumbnail_url' => $post['thumbnail_url'] ?? $post['media_url'] ?? null,
+                'posted_at' => isset($post['timestamp']) ? Carbon::parse($post['timestamp']) : null,
+            ],
+        );
+    }
+
+    /** Snapshot today's lifetime totals for one post. */
+    private function storeInsights(PendingRequest $client, AccountMedia $media): bool
+    {
+        $response = $client->get("/{$media->external_id}/insights", ['metric' => self::MEDIA_METRICS]);
+
+        if ($response->failed()) {
+            // Stories expire and some types report no insights — not fatal.
+            Log::info("Insight tidak tersedia untuk media {$media->external_id}.");
+
+            return false;
+        }
+
+        $values = $this->flatten($response->json('data', []));
+
+        MediaMetric::updateOrCreate(
+            ['account_media_id' => $media->id, 'captured_at' => now()->startOfHour()],
+            [
+                'captured_on' => today(),
+                'likes' => $values['likes'] ?? 0,
+                'comments' => $values['comments'] ?? 0,
+                'views' => $values['views'] ?? 0,
+                'reach' => $values['reach'] ?? 0,
+                'saves' => $values['saved'] ?? 0,
+                'shares' => $values['shares'] ?? 0,
+                'interactions' => $values['total_interactions'] ?? 0,
+            ],
+        );
+
+        return true;
+    }
+
+    /**
+     * Pull the latest comments on a post.
+     *
+     * Requires the `instagram_business_manage_comments` scope; without it the
+     * endpoint answers 200 with an empty list, so a quiet skip is correct.
+     */
+    private function storeComments(PendingRequest $client, AccountMedia $media): void
+    {
+        $response = $client->get("/{$media->external_id}/comments", [
+            'fields' => 'id,text,username,timestamp,like_count',
+            'limit' => self::COMMENT_LIMIT,
+        ]);
+
+        if ($response->failed()) {
+            return;
+        }
+
+        foreach ($response->json('data', []) as $comment) {
+            MediaComment::updateOrCreate(
+                ['account_media_id' => $media->id, 'external_id' => $comment['id']],
+                [
+                    'username' => $comment['username'] ?? null,
+                    'text' => $comment['text'] ?? null,
+                    'like_count' => $comment['like_count'] ?? 0,
+                    'commented_at' => isset($comment['timestamp']) ? Carbon::parse($comment['timestamp']) : null,
+                ],
+            );
+        }
+    }
+
+    /**
+     * Insights come back as [{name, values:[{value}]}] — flatten to name => value.
+     *
+     * @param  array<int, array<string, mixed>>  $data
+     * @return array<string, int>
+     */
+    private function flatten(array $data): array
+    {
+        $out = [];
+
+        foreach ($data as $metric) {
+            $out[$metric['name']] = (int) ($metric['values'][0]['value'] ?? 0);
+        }
+
+        return $out;
+    }
+}

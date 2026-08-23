@@ -2,30 +2,19 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "hatalabdallah/autopost-social-media",
     "type": "project",
-    "description": "A social media automation tool built with Laravel 11 and FilamentPHP for scheduling and auto-posting to Twitter, Facebook, WhatsApp, LinkedIn, Instagram, and TikTok.",
+    "description": "Social media content management system with an approval workflow, scheduling and Instagram publishing.",
     "keywords": [
         "laravel",
-        "filamentphp",
         "social-media-automation",
-        "autopost",
-        "twitter-api",
-        "facebook-api",
-        "whatsapp-cloud-api",
-        "linkedin-api",
-        "instagram-api",
-        "tiktok-api"
+        "content-workflow",
+        "instagram-api"
     ],
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "filament/filament": "^3.2",
-        "filament/spatie-laravel-tags-plugin": "^3.2",
-        "laravel/framework": "^11.31",
-        "laravel/tinker": "^2.9",
-        "livewire/livewire": "^3.5",
-        "noweh/twitter-api-v2-php": "^3.6",
-        "spatie/laravel-tags": "^4.8",
-        "custom-facebook/php-sdk-v4": "*"
+        "halaxa/json-machine": "^1.2",
+        "laravel/framework": "^12.0",
+        "laravel/tinker": "^2.10"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
@@ -52,8 +41,7 @@
     "scripts": {
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi",
-            "@php artisan filament:upgrade"
+            "@php artisan package:discover --ansi"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
@@ -86,11 +74,5 @@
         }
     },
     "minimum-stability": "dev",
-    "prefer-stable": true,
-    "repositories": [
-        {
-            "type": "path",
-            "url": "packages/facebook/graph-sdk"
-        }
-    ]
+    "prefer-stable": true
 }
