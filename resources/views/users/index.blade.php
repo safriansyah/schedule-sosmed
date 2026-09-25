@@ -42,8 +42,61 @@
 
     {{-- List --}}
     @if ($users->isNotEmpty())
-        <div class="card overflow-hidden">
-            {{-- Wide screens: table. Narrow: the same rows stack via flex-wrap. --}}
+        {{-- Phone: one card per person. The table is 640px wide at minimum and
+             the role labels have since grown ("Manager (Penanganan &
+             Pembagian)"), so on a 375px screen it was pure sideways scrolling. --}}
+        <div class="space-y-3 md:hidden">
+            @foreach ($users as $user)
+                <div class="card p-4">
+                    <div class="flex items-start gap-3">
+                        <span class="avatar h-10 w-10 shrink-0 text-sm">{{ $user->initial() }}</span>
+
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate font-semibold text-slate-800 dark:text-white">{{ $user->name }}</p>
+                            <p class="truncate text-xs text-slate-400">{{ $user->email }}</p>
+                        </div>
+
+                        @if ($user->is_active)
+                            <span class="badge-green shrink-0">Aktif</span>
+                        @else
+                            <span class="badge-red shrink-0">Nonaktif</span>
+                        @endif
+                    </div>
+
+                    <p class="mt-3">
+                        <span class="badge-blue">
+                            <x-icon :name="$user->role?->name?->icon() ?? 'users'" class="h-3 w-3"/>
+                            {{ $user->roleLabel() }}
+                        </span>
+                    </p>
+
+                    <div class="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-white/5">
+                        <span class="text-xs text-slate-400">
+                            {{ $user->last_login_at?->translatedFormat('d M Y, H:i') ?? 'Belum pernah login' }}
+                        </span>
+
+                        @can(App\Enums\Permission::ManageUsers->value)
+                            <span class="flex shrink-0 gap-2">
+                                <a href="{{ route('users.edit', $user) }}" class="btn-outline btn-sm">
+                                    <x-icon name="edit" class="h-3.5 w-3.5"/>
+                                </a>
+
+                                @unless ($user->is(auth()->user()))
+                                    <form method="POST" action="{{ route('users.destroy', $user) }}"
+                                          onsubmit="return confirm('Hapus pengguna {{ $user->name }}?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn-danger btn-sm"><x-icon name="trash" class="h-3.5 w-3.5"/></button>
+                                    </form>
+                                @endunless
+                            </span>
+                        @endcan
+                    </div>
+                </div>
+            @endforeach
+        </div>
+
+        <div class="card hidden overflow-hidden md:block">
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[640px]">
                     <thead class="border-b border-slate-100 dark:border-white/5">

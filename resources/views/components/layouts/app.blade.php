@@ -4,7 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? 'Dashboard' }} · {{ config('app.name') }}</title>
+    <title>{{ $title ?? 'Dashboard' }} · {{ $branding->name() }}</title>
+
+    @if ($branding->faviconUrl())
+        <link rel="icon" href="{{ $branding->faviconUrl() }}">
+    @endif
 
     {{-- Apply the stored theme before paint so there is no flash of the wrong mode --}}
     <script>
@@ -49,7 +53,7 @@
             </main>
 
             <footer class="px-6 py-5 text-center text-xs text-slate-400 dark:text-slate-600">
-                {{ config('app.name') }} &middot; {{ date('Y') }}
+                {{ $branding->name() }} &middot; {{ date('Y') }}
             </footer>
         </div>
     </div>

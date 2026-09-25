@@ -1,6 +1,6 @@
 <?php
-use App\Enums\{RoleName, SocialPlatform};
-use App\Models\{AccountMedia, MediaComment, SocialAccount, User};
+use App\Enums\{InteractionType, RoleName, SocialPlatform};
+use App\Models\{AccountMedia, Interaction, SocialAccount, User};
 use App\Services\Publishing\InstagramProfileLookup;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\{Cache, Http};
@@ -64,9 +64,12 @@ it('renders the profile page with counts and the commenter history', function ()
         'social_account_id' => $account->id, 'external_id' => 'pm1',
         'permalink' => 'https://instagram.com/p/A/', 'caption' => 'Postingan uji', 'posted_at' => now(),
     ]);
-    MediaComment::create([
-        'account_media_id' => $media->id, 'external_id' => 'c1',
-        'username' => 'aayulstrr', 'text' => 'keren banget', 'commented_at' => now(),
+    Interaction::create([
+        'channel' => SocialPlatform::Instagram->value,
+        'type' => InteractionType::Comment->value,
+        'source_type' => AccountMedia::class, 'source_id' => $media->id,
+        'external_id' => 'c1', 'author_handle' => 'aayulstrr',
+        'text' => 'keren banget', 'occurred_at' => now(),
     ]);
 
     $this->actingAs(User::withRole(RoleName::SuperAdmin)->firstOrFail())

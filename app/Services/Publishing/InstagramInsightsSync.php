@@ -2,12 +2,15 @@
 
 namespace App\Services\Publishing;
 
+use App\Enums\InteractionType;
 use App\Enums\SocialPlatform;
 use App\Models\AccountMedia;
-use App\Models\MediaComment;
+use App\Models\Interaction;
 use App\Models\MediaMetric;
 use App\Models\Schedule;
 use App\Models\SocialAccount;
+use App\Services\Crm\ContactResolver;
+use App\Services\Media\RemoteImageCache;
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Carbon;
@@ -35,6 +38,11 @@ class InstagramInsightsSync
 
     /** Hard ceiling on pages walked per run, so one account cannot hog the run. */
     private const MAX_PAGES = 40;   // 40 × 50 = 2000 posts
+
+    public function __construct(
+        private readonly ContactResolver $contacts,
+        private readonly RemoteImageCache $images,
+    ) {}
 
     /**
      * Insights cost one API call per post, and Instagram rate-limits hard.
@@ -174,7 +182,11 @@ class InstagramInsightsSync
                 'media_type' => $post['media_type'] ?? null,
                 'product_type' => $post['media_product_type'] ?? null,
                 'permalink' => $post['permalink'] ?? null,
-                'thumbnail_url' => $post['thumbnail_url'] ?? $post['media_url'] ?? null,
+                'thumbnail_url' => $thumbnail = $post['thumbnail_url'] ?? $post['media_url'] ?? null,
+                // Downloaded now, while the CDN signature is still valid. These
+                // links carry an `oe=` expiry and stop resolving after about a
+                // fortnight, which is why the stored URL alone is not enough.
+                'thumbnail_path' => $this->images->store($thumbnail, 'thumbnails', $post['id']),
                 'posted_at' => isset($post['timestamp']) ? Carbon::parse($post['timestamp']) : null,
             ],
         );
@@ -229,15 +241,28 @@ class InstagramInsightsSync
         }
 
         foreach ($response->json('data', []) as $comment) {
-            MediaComment::updateOrCreate(
-                ['account_media_id' => $media->id, 'external_id' => $comment['id']],
+            // Same unified inbox the viewer-based sync writes to, keyed on the
+            // same (channel, external_id) — so whichever source sees a comment
+            // first, the other updates the row rather than duplicating it.
+            $interaction = Interaction::updateOrCreate(
+                ['channel' => SocialPlatform::Instagram->value, 'external_id' => $comment['id']],
                 [
-                    'username' => $comment['username'] ?? null,
+                    'type' => InteractionType::Comment->value,
+                    'direction' => 'inbound',
+                    'source_type' => AccountMedia::class,
+                    'source_id' => $media->id,
+                    'author_handle' => $comment['username'] ?? null,
                     'text' => $comment['text'] ?? null,
                     'like_count' => $comment['like_count'] ?? 0,
-                    'commented_at' => isset($comment['timestamp']) ? Carbon::parse($comment['timestamp']) : null,
+                    'occurred_at' => isset($comment['timestamp']) ? Carbon::parse($comment['timestamp']) : null,
                 ],
             );
+
+            try {
+                $this->contacts->resolveFor($interaction);
+            } catch (Throwable $e) {
+                Log::warning('Gagal mencocokkan kontak komentar Graph API: '.$e->getMessage());
+            }
         }
     }
 

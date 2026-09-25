@@ -4,6 +4,7 @@ namespace App\Services\Publishing;
 
 use App\Enums\SocialPlatform;
 use App\Models\SocialAccount;
+use App\Services\Media\RemoteImageCache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -45,13 +46,67 @@ class AccountVerifier
             'external_id' => $data['id'],
             'username' => $data['username'] ?? $account->username,
             'name' => $data['name'] ?: ($data['username'] ?? $account->name),
-            'avatar_url' => $data['profile_picture_url'] ?? null,
+            'avatar_url' => $avatar = $data['profile_picture_url'] ?? null,
+            // force: verifying is a deliberate action, so it is also the way to
+            // refresh a profile picture that has changed.
+            'avatar_path' => app(RemoteImageCache::class)
+                ->store($avatar, 'accounts', (string) $account->getKey(), force: true),
             'followers_count' => $data['followers_count'] ?? 0,
             'media_count' => $data['media_count'] ?? 0,
-            'meta' => ['account_type' => $data['account_type'] ?? null, 'verified_at' => now()->toIso8601String()],
+            // MERGED, not replaced. Overwriting the whole column threw away
+            // `token_refreshed_at`, which TokenRefresher reads to honour
+            // Instagram's "no refresh under 24 hours" rule — so every
+            // verification quietly broke the next automatic renewal.
+            'meta' => array_merge($account->meta ?? [], [
+                'account_type' => $data['account_type'] ?? null,
+                'verified_at' => now()->toIso8601String(),
+            ]),
         ])->save();
 
+        $this->correctExpiry($account);
+
         return $account->refresh();
+    }
+
+    /**
+     * Reconcile the stored expiry with what just happened.
+     *
+     * Instagram answered this token, so it is valid RIGHT NOW. If our column
+     * says it lapsed, the column is wrong — and it was wrong loudly: the
+     * accounts page told the user to go and mint a new token while the
+     * connection test on the same screen reported success.
+     *
+     * Best effort, in order:
+     *   1. Ask Instagram to refresh, which returns a real `expires_in`.
+     *   2. If that is refused (a token under 24 hours old cannot be
+     *      refreshed), clear the expiry rather than keep a date we have just
+     *      disproved. "Unknown" is honest; "expired" is not.
+     */
+    private function correctExpiry(SocialAccount $account): void
+    {
+        $expiry = $account->token_expires_at;
+
+        // A future date needs no correcting — the record already agrees with
+        // reality.
+        if ($expiry !== null && $expiry->isFuture()) {
+            return;
+        }
+
+        try {
+            app(TokenRefresher::class)->refresh($account);
+
+            return;
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        $account->forceFill([
+            'token_expires_at' => null,
+            'meta' => array_merge($account->meta ?? [], [
+                'expiry_unknown_since' => now()->toIso8601String(),
+                'expiry_note' => 'Token terbukti masih dipakai Instagram, tetapi masa berlakunya tidak bisa dipastikan.',
+            ]),
+        ])->save();
     }
 
     private function readableError(string $body): string

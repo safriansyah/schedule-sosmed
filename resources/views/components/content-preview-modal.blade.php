@@ -63,7 +63,9 @@
             {{-- Caption --}}
             <div>
                 <p class="label">Caption</p>
-                <p class="whitespace-pre-line text-sm text-slate-600 dark:text-slate-300">{{ $content->caption ?: '—' }}</p>
+                {{-- break-words: caption sering memuat URL panjang tanpa spasi,
+                     dan whitespace-pre-line saja tidak memutusnya. --}}
+                <p class="whitespace-pre-line break-words text-sm text-slate-600 dark:text-slate-300">{{ $content->caption ?: '—' }}</p>
             </div>
 
             {{-- Hashtags --}}

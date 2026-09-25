@@ -1,6 +1,9 @@
 <?php
+
+use App\Enums\ContactStatus;
+use App\Enums\InteractionType;
 use App\Enums\SocialPlatform;
-use App\Models\{AccountMedia, MediaComment, SocialAccount};
+use App\Models\{AccountMedia, Contact, ContactIdentity, Interaction, SocialAccount};
 use App\Services\Publishing\InstagramCommentSync;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
@@ -67,17 +70,57 @@ it('stores comments from the viewer response, mapped correctly', function () {
     $stored = commentSync()->syncMedia($media);
 
     expect($stored)->toBe(2);
-    expect($media->comments()->count())->toBe(2);
+    expect($media->interactions()->count())->toBe(2);
 
-    $verified = MediaComment::where('username', 'itstina')->first();
-    expect($verified->is_verified)->toBeTrue();
-    expect($verified->full_name)->toBe('Tina');
+    $verified = Interaction::where('author_handle', 'itstina')->first();
+    expect($verified->author_verified)->toBeTrue();
+    expect($verified->author_name)->toBe('Tina');
     expect($verified->like_count)->toBe(5);
     expect($verified->reply_count)->toBe(1);
     expect($verified->external_id)->toBe('18031910981833236');
+    expect($verified->channel)->toBe(SocialPlatform::Instagram);
+    expect($verified->type)->toBe(InteractionType::Comment);
 
     // Empty full_name is normalised to null.
-    expect(MediaComment::where('username', 'aayulstrr')->value('full_name'))->toBeNull();
+    expect(Interaction::where('author_handle', 'aayulstrr')->value('author_name'))->toBeNull();
+});
+
+it('resolves each commenter to a contact with a channel identity', function () {
+    Http::fake([
+        '*/comments/*' => Http::response([
+            'code' => 0,
+            'data' => ['comments' => [[
+                'comment_time' => '2026-07-21 10:00:00', 'pk' => 'res-1', 'text' => 'halo',
+                'comment_like_count' => 0,
+                'media_user_dto' => ['username' => 'BudiSantoso', 'full_name' => 'Budi Santoso'],
+            ]]],
+        ]),
+    ]);
+
+    $account = SocialAccount::firstOrCreate(
+        ['platform' => SocialPlatform::Instagram, 'external_id' => 'res-acc'],
+        ['name' => 'Resolve', 'access_token' => 'x', 'is_active' => true],
+    );
+    $media = AccountMedia::create([
+        'social_account_id' => $account->id, 'external_id' => 'm-res',
+        'permalink' => 'https://www.instagram.com/p/Res1/', 'posted_at' => now(),
+    ]);
+
+    commentSync()->syncMedia($media);
+
+    $interaction = Interaction::where('external_id', 'res-1')->firstOrFail();
+
+    expect($interaction->contact_id)->not->toBeNull();
+
+    $contact = Contact::findOrFail($interaction->contact_id);
+    expect($contact->code)->toStartWith('UT-');
+    expect($contact->status)->toBe(ContactStatus::NonAgent);
+
+    // Handles are stored lower-cased so "BudiSantoso" and "budisantoso" are
+    // recognised as the same person on a later sync.
+    $identity = ContactIdentity::where('contact_id', $contact->id)->firstOrFail();
+    expect($identity->handle)->toBe('budisantoso');
+    expect($identity->channel)->toBe(SocialPlatform::Instagram);
 });
 
 it('is idempotent — re-syncing updates rather than duplicates', function () {
@@ -103,7 +146,9 @@ it('is idempotent — re-syncing updates rather than duplicates', function () {
     commentSync()->syncMedia($media);
     commentSync()->syncMedia($media);
 
-    expect($media->comments()->count())->toBe(1);
+    expect($media->interactions()->count())->toBe(1);
+    // …and one commenter, not two.
+    expect(ContactIdentity::where('handle', 'a')->count())->toBe(1);
 });
 
 it('swallows a failed viewer response without throwing', function () {
@@ -119,5 +164,5 @@ it('swallows a failed viewer response without throwing', function () {
     ]);
 
     expect(commentSync()->syncMedia($media))->toBe(0);
-    expect($media->comments()->count())->toBe(0);
+    expect($media->interactions()->count())->toBe(0);
 });

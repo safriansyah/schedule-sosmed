@@ -29,6 +29,12 @@
         </div>
     </x-slot:header>
 
+    {{-- Automation health. First thing on the page: if the scheduler is down,
+         every number below it is stale and should be read that way. --}}
+    @if ($health)
+        @include('dashboard.partials.health')
+    @endif
+
     {{-- Workflow counters, each compared to the previous window --}}
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         @foreach ($workflow as $key => $card)
@@ -82,6 +88,19 @@
         @endif
     </div>
 
+    {{-- Interaksi & sentimen — only for roles that work the inbox. Placed
+         above account performance because it is about people waiting for a
+         reply, not about numbers that can be read tomorrow. --}}
+    @if ($crm)
+        @include('dashboard.partials.crm')
+    @endif
+
+    {{-- Mahasiswa & tiket. Below the inbox because a comment waiting for a
+         reply is more urgent than a caseload total. --}}
+    @if ($handling)
+        @include('dashboard.partials.handling')
+    @endif
+
     {{-- Account performance --}}
     @if ($accounts->isNotEmpty())
         <div class="mt-6">
@@ -92,16 +111,8 @@
                     <a href="{{ route('monitoring.index', ['account' => $row['account']->id]) }}"
                        class="card-glow block p-5">
                         <div class="flex items-center gap-3">
-                            @if ($row['account']->avatar_url)
-                                <img src="{{ $row['account']->avatar_url }}" alt=""
-                                     class="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-brand-500/30">
-                            @else
-                                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white"
-                                      style="background: {{ $row['account']->platform->color() }}">
-                                    <x-icon :name="$row['account']->platform->icon()" class="h-5 w-5"/>
-                                </span>
-                            @endif
-
+                            <x-account-avatar :account="$row['account']" size="h-11 w-11"
+                                              ring="ring-2 ring-brand-500/30"/>
                             <div class="min-w-0 flex-1">
                                 <p class="truncate text-sm font-semibold text-slate-800 dark:text-white">{{ $row['account']->name }}</p>
                                 <p class="truncate text-xs text-slate-400">{{ $row['account']->handle() }}</p>

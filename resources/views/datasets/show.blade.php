@@ -90,7 +90,7 @@
                    class="block w-full text-sm text-slate-500 file:mr-4 file:rounded-xl file:border-0 file:bg-brand-600 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-500">
             @error('file') <p class="text-sm text-rose-500">{{ $message }}</p> @enderror
             <div class="flex justify-end gap-2">
-                <button type="button" @click="$dispatch('close-modal','replace')" class="btn-outline">Cancel</button>
+                <button type="button" @click="$dispatch('close-modal','replace')" class="btn-outline">Batal</button>
                 <button class="btn-primary"><x-icon name="upload" class="w-4 h-4"/> Replace &amp; process</button>
             </div>
         </form>
@@ -114,7 +114,7 @@
                        value="{{ $dataset->description }}" placeholder="Short note about this dataset">
             </div>
             <div class="flex justify-end gap-2 pt-2">
-                <button type="button" @click="$dispatch('close-modal','rename-dataset')" class="btn-outline">Cancel</button>
+                <button type="button" @click="$dispatch('close-modal','rename-dataset')" class="btn-outline">Batal</button>
                 <button class="btn-primary"><x-icon name="check" class="w-4 h-4"/> Save name</button>
             </div>
         </form>

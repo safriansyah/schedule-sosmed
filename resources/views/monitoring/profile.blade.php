@@ -77,7 +77,8 @@
     <div class="mt-6">
         <h2 class="mb-3 text-base font-bold text-slate-800 dark:text-white">
             Komentar &commat;{{ $username }} di postingan kita
-            <span class="text-sm font-normal text-slate-400">({{ $comments->count() }})</span>
+            {{-- total(), bukan count(): count() hanya menghitung halaman ini. --}}
+            <span class="text-sm font-normal text-slate-400">({{ number_format($comments->total()) }})</span>
         </h2>
 
         <div class="card p-2">
@@ -91,5 +92,7 @@
                                class="!py-8"/>
             @endforelse
         </div>
+
+        <div class="mt-6">{{ $comments->links() }}</div>
     </div>
 </x-layouts.app>

@@ -31,11 +31,26 @@ class DatabaseSeeder extends Seeder
             ['Creative Dua', 'creative2@example.com'],
             ['Creative Tiga', 'creative3@example.com'],
         ],
+
+        // CRM side: these handle people rather than content.
+        RoleName::Manager->value => [
+            ['Manager CRM', 'manager@example.com'],
+        ],
+        RoleName::Pic->value => [
+            ['PIC Satu', 'pic1@example.com'],
+            ['PIC Dua', 'pic2@example.com'],
+        ],
+        RoleName::Operator->value => [
+            ['Operator Satu', 'operator1@example.com'],
+            ['Operator Dua', 'operator2@example.com'],
+        ],
     ];
 
     public function run(): void
     {
         $this->call(RolePermissionSeeder::class);
+        $this->call(RegionSeeder::class);
+        $this->call(TicketCategorySeeder::class);
 
         $roles = Role::pluck('id', 'name');
 
@@ -53,5 +68,13 @@ class DatabaseSeeder extends Seeder
                 $user->save();
             }
         }
+
+        // Demo data last: TaskSeeder stamps `created_by` from the team above,
+        // so it has to run once those accounts exist.
+        //
+        // Placeholder only — see StudentSeeder. Safe to re-run, and safe to
+        // drop once the real spreadsheet is imported.
+        $this->call(StudentSeeder::class);
+        $this->call(TaskSeeder::class);
     }
 }

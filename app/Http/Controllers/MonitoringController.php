@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\Permission;
 use App\Models\AccountMedia;
-use App\Models\MediaComment;
+use App\Models\Interaction;
 use App\Models\SocialAccount;
 use App\Services\Analytics\MetricsComparison;
 use App\Services\Publishing\InstagramProfileLookup;
@@ -51,14 +51,7 @@ class MonitoringController extends Controller
 
         $posts = $account ? $this->posts($request, $account) : null;
 
-        $recentComments = $account
-            ? MediaComment::whereHas('media', fn ($q) => $q->where('social_account_id', $account->id))
-                ->with('media:id,thumbnail_url,caption,product_type')
-                ->whereNotNull('text')
-                ->latest('commented_at')
-                ->limit(8)
-                ->get()
-            : collect();
+        $recentComments = $account ? $this->accountComments($account)->limit(8)->get() : collect();
 
         return view('monitoring.index', [
             'accounts' => $accounts,
@@ -112,6 +105,7 @@ class MonitoringController extends Controller
             ->when($request->input('origin') === 'app', fn ($q) => $q->whereNotNull('content_id'))
             ->when($request->input('origin') === 'external', fn ($q) => $q->whereNull('content_id'))
             ->orderByRaw(self::SORTS[$sort][1])
+            ->orderBy('account_media.id')
             ->paginate(12)
             ->withQueryString();
     }
@@ -130,7 +124,7 @@ class MonitoringController extends Controller
             'snapshots' => $snapshots,
             'latest' => $snapshots->last(),
             'growth' => $this->growthWindows($snapshots),
-            'comments' => $media->comments()->paginate(15),
+            'comments' => $media->interactions()->with('contact:id,code,full_name,display_name,status')->paginate(15),
         ]);
     }
 
@@ -142,13 +136,14 @@ class MonitoringController extends Controller
         $username = ltrim($username, '@');
 
         // Their comments on posts we actually monitor.
-        $comments = MediaComment::where('username', $username)
-            ->whereHas('media')
-            ->with('media:id,thumbnail_url,caption,product_type')
+        // Dipaginasi, bukan dipotong 30: orang yang sering berkomentar justru
+        // yang paling perlu dibaca lengkap, dan daftar terpenggal tanpa
+        // navigasi adalah jalan buntu.
+        $comments = Interaction::where('author_handle', $username)
+            ->with('source:id,thumbnail_url,thumbnail_path,caption,product_type', 'contact:id,code,full_name,display_name,status')
             ->whereNotNull('text')
-            ->latest('commented_at')
-            ->limit(30)
-            ->get();
+            ->latest('occurred_at')
+            ->paginate(20);
 
         return view('monitoring.profile', [
             'username' => $username,
@@ -166,14 +161,8 @@ class MonitoringController extends Controller
         $account = $accounts->firstWhere('id', $request->input('account')) ?? $accounts->first();
 
         $comments = $account
-            ? MediaComment::whereHas('media', fn ($q) => $q->where('social_account_id', $account->id))
-                ->with('media:id,thumbnail_url,caption,product_type')
-                ->when($request->input('q'), fn ($q, $term) => $q->where(fn ($sub) => $sub
-                    ->where('text', 'like', "%{$term}%")
-                    ->orWhere('username', 'like', "%{$term}%")
-                    ->orWhere('full_name', 'like', "%{$term}%")))
-                ->whereNotNull('text')
-                ->latest('commented_at')
+            ? $this->accountComments($account)
+                ->search($request->input('q'))
                 ->paginate(30)
                 ->withQueryString()
             : null;
@@ -184,6 +173,22 @@ class MonitoringController extends Controller
             'comments' => $comments,
             'filters' => $request->only('account', 'q'),
         ]);
+    }
+
+    /**
+     * Comments on one account's posts, newest first.
+     *
+     * whereHasMorph rather than a join: `source` is polymorphic, and this keeps
+     * DMs (which have no post) out of a post-comment list automatically.
+     */
+    private function accountComments(SocialAccount $account)
+    {
+        return Interaction::query()
+            ->whereHasMorph('source', AccountMedia::class,
+                fn ($q) => $q->where('social_account_id', $account->id))
+            ->with('source:id,thumbnail_url,caption,product_type', 'contact:id,code,full_name,display_name,status')
+            ->whereNotNull('text')
+            ->latest('occurred_at');
     }
 
     /**

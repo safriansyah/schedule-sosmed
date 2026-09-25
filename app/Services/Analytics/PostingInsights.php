@@ -2,7 +2,8 @@
 
 namespace App\Services\Analytics;
 
-use App\Models\MediaComment;
+use App\Models\AccountMedia;
+use App\Models\Interaction;
 use App\Models\SocialAccount;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -77,7 +78,7 @@ class PostingInsights
             ->orderByDesc('m.interactions')
             ->limit($limit)
             ->select([
-                'am.id', 'am.caption', 'am.permalink', 'am.thumbnail_url',
+                'am.id', 'am.caption', 'am.permalink', 'am.thumbnail_url', 'am.thumbnail_path',
                 'am.product_type', 'am.posted_at',
                 'm.likes', 'm.comments', 'm.views', 'm.reach', 'm.interactions',
             ])
@@ -87,10 +88,11 @@ class PostingInsights
     /** Newest comments across every monitored post on the account. */
     public function recentComments(SocialAccount $account, int $limit = 10): Collection
     {
-        return MediaComment::query()
-            ->with('media:id,caption,thumbnail_url,permalink')
-            ->whereHas('media', fn ($q) => $q->where('social_account_id', $account->id))
-            ->orderByDesc('commented_at')
+        return Interaction::query()
+            ->with('source:id,caption,thumbnail_url,permalink', 'contact:id,code,full_name,display_name,status')
+            ->whereHasMorph('source', AccountMedia::class,
+                fn ($q) => $q->where('social_account_id', $account->id))
+            ->orderByDesc('occurred_at')
             ->limit($limit)
             ->get();
     }

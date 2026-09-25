@@ -41,7 +41,39 @@
     @endphp
 
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        {{-- Phone: one card per metric, periods stacked. The table is one
+             column per period and grows with them, so it is the shape most
+             likely to run off a small screen. --}}
+        <div class="divide-y divide-slate-100 md:hidden dark:divide-white/5">
+            @foreach ($metrics as $key => [$label, $icon])
+                <div class="p-4">
+                    <p class="flex items-center gap-2 font-semibold text-slate-800 dark:text-white">
+                        <x-icon :name="$icon" class="h-4 w-4 text-slate-400"/> {{ $label }}
+                    </p>
+
+                    <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+                        @foreach ($labels as $periodKey => [$periodLabel, $days])
+                            @php $m = $periods[$periodKey]['metrics'][$key] ?? null; @endphp
+                            <div class="min-w-0">
+                                <dt class="text-[11px] text-slate-400">{{ $periodLabel }}</dt>
+                                <dd>
+                                    @if ($m)
+                                        <span class="font-bold text-slate-800 dark:text-white">
+                                            {{ number_format($m['current']) }}
+                                        </span>
+                                        <x-delta :current="$m['current']" :previous="$m['previous']" class="ml-1"/>
+                                    @else
+                                        <span class="text-slate-300">-</span>
+                                    @endif
+                                </dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                </div>
+            @endforeach
+        </div>
+
+        <div class="hidden overflow-x-auto md:block">
             <table class="w-full min-w-[760px]">
                 <thead class="border-b border-slate-100 dark:border-white/5">
                     <tr>
@@ -201,11 +233,9 @@
             @forelse ($topPosts as $post)
                 <a href="{{ route('monitoring.show', $post->id) }}"
                    class="row-hover -mx-2 flex items-start gap-3 rounded-xl px-2 py-2.5">
-                    <div class="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-white/5">
-                        @if ($post->thumbnail_url)
-                            <img src="{{ $post->thumbnail_url }}" alt="" loading="lazy" class="h-full w-full object-cover">
-                        @endif
-                    </div>
+                    {{-- Baris dari DB::table, jadi tidak punya accessor — lihat AccountMedia::imageUrl(). --}}
+                    <x-remote-image class="h-12 w-12 shrink-0 rounded-lg"
+                                    :src="App\Models\AccountMedia::imageUrl($post->thumbnail_path, $post->thumbnail_url)"/>
 
                     <div class="min-w-0 flex-1">
                         <p class="line-clamp-1 text-sm text-slate-700 dark:text-slate-200">

@@ -65,7 +65,5 @@
         @endforelse
     </div>
 
-    @if ($notifications->hasPages())
-        <div class="mt-6">{{ $notifications->links() }}</div>
-    @endif
+    <div class="mt-6">{{ $notifications->links() }}</div>
 </x-layouts.app>

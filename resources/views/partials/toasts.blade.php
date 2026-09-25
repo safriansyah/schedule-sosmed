@@ -1,10 +1,47 @@
 {{-- Toast stack — driven by Alpine store('toasts'); seeded from session flash --}}
+@php
+    /**
+     * Two flash conventions exist in this codebase and both must work.
+     *
+     *   session('toast') => ['message' => …, 'type' => …]   (the original)
+     *   session('success' | 'info' | 'warning' | 'error')   (plain string)
+     *
+     * Reading only the first meant every ->with('success', …) — three dozen of
+     * them — flashed into the void: the action succeeded and the user was told
+     * nothing at all. Rather than rewrite every call site, both are collected
+     * here, which also means neither convention can silently break again.
+     */
+    $flashes = [];
+
+    if ($structured = session('toast')) {
+        $flashes[] = [
+            'message' => $structured['message'] ?? '',
+            'type' => $structured['type'] ?? 'success',
+        ];
+    }
+
+    foreach (['success', 'info', 'warning', 'error'] as $type) {
+        if (filled($message = session($type))) {
+            // Guard against a non-string being flashed under these keys.
+            $flashes[] = ['message' => is_string($message) ? $message : json_encode($message), 'type' => $type];
+        }
+    }
+
+    $flashes = array_values(array_filter($flashes, fn ($f) => filled($f['message'])));
+
+    // Validation errors surface as one toast; the per-field messages are
+    // already rendered next to their inputs.
+    $showErrors = $errors->any() && ! request()->routeIs('login');
+@endphp
+
 <div
     x-data
-    @if (session('toast') || $errors->any())
+    @if ($flashes || $showErrors)
         x-init="
-            @if (session('toast')) $store.toasts.push(@js(session('toast')['message']), @js(session('toast')['type'] ?? 'success')); @endif
-            @if ($errors->any() && ! request()->routeIs('login')) $store.toasts.push(@js($errors->first()), 'error'); @endif
+            @foreach ($flashes as $flash)
+                $store.toasts.push(@js($flash['message']), @js($flash['type']));
+            @endforeach
+            @if ($showErrors) $store.toasts.push(@js($errors->first()), 'error'); @endif
         "
     @endif
     class="fixed right-5 top-5 z-[100] flex w-[min(92vw,22rem)] flex-col gap-3"

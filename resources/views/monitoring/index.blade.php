@@ -67,15 +67,7 @@
 
     {{-- Account header --}}
     <div class="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-        @if ($account->avatar_url)
-            <img src="{{ $account->avatar_url }}" alt=""
-                 class="h-14 w-14 shrink-0 rounded-full object-cover ring-2 ring-brand-500/40">
-        @else
-            <span class="grid h-14 w-14 shrink-0 place-items-center rounded-full text-white"
-                  style="background: {{ $account->platform->color() }}">
-                <x-icon :name="$account->platform->icon()" class="h-6 w-6"/>
-            </span>
-        @endif
+        <x-account-avatar :account="$account" size="h-14 w-14"/>
 
         <div class="min-w-0 flex-1">
             <p class="truncate text-base font-bold text-slate-800 dark:text-white">{{ $account->name }}</p>
@@ -256,14 +248,8 @@
             @foreach ($posts as $post)
                 <a href="{{ route('monitoring.show', $post) }}" class="card-glow group flex flex-col overflow-hidden">
                     <div class="relative aspect-square bg-slate-100 dark:bg-white/5">
-                        @if ($post->thumbnail_url)
-                            <img src="{{ $post->thumbnail_url }}" alt="" loading="lazy"
-                                 class="h-full w-full object-cover transition group-hover:scale-[1.03]">
-                        @else
-                            <div class="grid h-full place-items-center text-slate-300 dark:text-slate-600">
-                                <x-icon name="image" class="h-8 w-8"/>
-                            </div>
-                        @endif
+                        <x-remote-image class="h-full w-full" :src="$post->thumbnail()"
+                                        label="Foto belum tersimpan"/>
 
                         <span class="absolute left-2 top-2 badge-slate shadow-sm">
                             {{ $post->isReel() ? 'Reels' : ucfirst(strtolower($post->product_type ?? 'Feed')) }}

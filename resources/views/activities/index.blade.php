@@ -63,7 +63,5 @@
         @endforelse
     </div>
 
-    @if ($activities->hasPages())
-        <div class="mt-6">{{ $activities->links() }}</div>
-    @endif
+    <div class="mt-6">{{ $activities->links() }}</div>
 </x-layouts.app>

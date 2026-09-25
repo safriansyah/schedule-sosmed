@@ -9,57 +9,13 @@
     {{-- Main column --}}
     <div class="space-y-6 lg:col-span-2">
 
-        <div class="card p-5">
-            <p class="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Isi Konten</p>
+        {{-- Media first, then the words.
 
-            {{-- Title --}}
-            <div>
-                <label for="title" class="label">Judul <span class="text-rose-500">*</span></label>
-                <input id="title" name="title" type="text" required maxlength="180"
-                       value="{{ old('title', $content?->title) }}"
-                       class="input @error('title') border-rose-400 @enderror"
-                       placeholder="Misal: Promo Ramadan — Feed 1">
-                @error('title') <p class="form-error">{{ $message }}</p> @enderror
-            </div>
-
-            {{-- Caption --}}
-            <div class="mt-4" x-data="{ text: @js(old('caption', $content?->caption ?? '')) }">
-                <div class="flex items-center justify-between">
-                    <label for="caption" class="label">Caption</label>
-                    <span class="text-xs text-slate-400" x-text="`${text.length} / 2200`"></span>
-                </div>
-                <textarea id="caption" name="caption" rows="6" maxlength="2200" x-model="text"
-                          class="input @error('caption') border-rose-400 @enderror"
-                          placeholder="Tulis caption yang akan tampil di postingan…"></textarea>
-                @error('caption') <p class="form-error">{{ $message }}</p> @enderror
-            </div>
-
-            {{-- Hashtags --}}
-            <div class="mt-4">
-                <label for="hashtags" class="label">Hashtag</label>
-                <input id="hashtags" name="hashtags" type="text" maxlength="600"
-                       value="{{ old('hashtags', $content?->hashtags) }}"
-                       class="input @error('hashtags') border-rose-400 @enderror"
-                       placeholder="promo ramadan diskon">
-                <p class="mt-1 text-xs text-slate-400">Pisahkan dengan spasi — tanda # ditambahkan otomatis.</p>
-                @error('hashtags') <p class="form-error">{{ $message }}</p> @enderror
-            </div>
-
-            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                    <label for="mention" class="label">Mention</label>
-                    <input id="mention" name="mention" type="text" value="{{ old('mention', $content?->mention) }}"
-                           class="input" placeholder="@akun_partner">
-                </div>
-                <div>
-                    <label for="location" class="label">Lokasi</label>
-                    <input id="location" name="location" type="text" value="{{ old('location', $content?->location) }}"
-                           class="input" placeholder="Jakarta, Indonesia">
-                </div>
-            </div>
-        </div>
-
-        {{-- Media --}}
+             A post is chosen by its picture: the caption is written to fit the
+             image, the aspect ratio decides whether a carousel is even
+             possible, and a rejected file makes the caption moot. Asking for
+             the text first meant writing it twice whenever the media would not
+             fit. --}}
         <div class="card p-5" x-data="mediaPicker()">
             <div class="mb-4 flex items-center justify-between">
                 <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Media</p>
@@ -209,6 +165,56 @@
             @foreach ($errors->get('media.*') as $messages)
                 <p class="form-error">{{ $messages[0] }}</p>
             @endforeach
+        </div>
+
+        <div class="card p-5">
+            <p class="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Isi Konten</p>
+
+            {{-- Title --}}
+            <div>
+                <label for="title" class="label">Judul <span class="text-rose-500">*</span></label>
+                <input id="title" name="title" type="text" required maxlength="180"
+                       value="{{ old('title', $content?->title) }}"
+                       class="input @error('title') border-rose-400 @enderror"
+                       placeholder="Misal: Promo Ramadan — Feed 1">
+                @error('title') <p class="form-error">{{ $message }}</p> @enderror
+            </div>
+
+            {{-- Caption --}}
+            <div class="mt-4" x-data="{ text: @js(old('caption', $content?->caption ?? '')) }">
+                <div class="flex items-center justify-between">
+                    <label for="caption" class="label">Caption</label>
+                    <span class="text-xs text-slate-400" x-text="`${text.length} / 2200`"></span>
+                </div>
+                <textarea id="caption" name="caption" rows="6" maxlength="2200" x-model="text"
+                          class="input @error('caption') border-rose-400 @enderror"
+                          placeholder="Tulis caption yang akan tampil di postingan…"></textarea>
+                @error('caption') <p class="form-error">{{ $message }}</p> @enderror
+            </div>
+
+            {{-- Hashtags --}}
+            <div class="mt-4">
+                <label for="hashtags" class="label">Hashtag</label>
+                <input id="hashtags" name="hashtags" type="text" maxlength="600"
+                       value="{{ old('hashtags', $content?->hashtags) }}"
+                       class="input @error('hashtags') border-rose-400 @enderror"
+                       placeholder="promo ramadan diskon">
+                <p class="mt-1 text-xs text-slate-400">Pisahkan dengan spasi — tanda # ditambahkan otomatis.</p>
+                @error('hashtags') <p class="form-error">{{ $message }}</p> @enderror
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="mention" class="label">Mention</label>
+                    <input id="mention" name="mention" type="text" value="{{ old('mention', $content?->mention) }}"
+                           class="input" placeholder="@akun_partner">
+                </div>
+                <div>
+                    <label for="location" class="label">Lokasi</label>
+                    <input id="location" name="location" type="text" value="{{ old('location', $content?->location) }}"
+                           class="input" placeholder="Jakarta, Indonesia">
+                </div>
+            </div>
         </div>
     </div>
 

@@ -31,6 +31,17 @@ enum Permission: string
     case ViewVerification = 'verification.view';
     case DecideVerification = 'verification.decide';
 
+    // Inbox interaksi (komentar & DM lintas kanal)
+    case ViewInteractions = 'interaction.view';
+    case ViewAllInteractions = 'interaction.viewAll';  // lihat tugas semua petugas
+    case HandleInteractions = 'interaction.handle';   // balas, ubah status, isi follow-up
+    case AssignInteractions = 'interaction.assign';   // tugaskan ke petugas lain
+
+    // Database kontak / agent
+    case ViewContacts = 'contact.view';
+    case ManageContacts = 'contact.manage';           // ubah nama asli, wilayah, catatan
+    case ManageAgents = 'contact.agent';              // promosikan jadi agent
+
     // Calendar
     case ViewCalendar = 'calendar.view';
     case ManageCalendar = 'calendar.manage';   // drag & drop reschedule
@@ -39,6 +50,31 @@ enum Permission: string
     // UT Monitoring Account (bulk account datasets)
     case ViewDatasets = 'dataset.view';
     case ManageDatasets = 'dataset.manage';
+
+    // Data mahasiswa (hasil import, dibagi ke operator)
+    case ViewStudents = 'student.view';
+    case ViewAllStudents = 'student.viewAll';     // lihat data operator lain
+    case ManageStudents = 'student.manage';       // ubah data & catatan
+    case ImportStudents = 'student.import';
+    case AssignStudents = 'student.assign';       // bagikan ke operator
+
+    // Ticketing
+    case ViewTickets = 'ticket.view';
+    case ViewAllTickets = 'ticket.viewAll';       // lihat tiket operator lain
+    case CreateTickets = 'ticket.create';
+    case HandleTickets = 'ticket.handle';         // follow up, ubah status
+    case AssignTickets = 'ticket.assign';
+    case CloseTickets = 'ticket.close';
+    case ManageTicketCategories = 'ticket.category';
+
+    // Task management
+    case ViewTasks = 'task.view';
+    case ManageTasks = 'task.manage';
+    case PublishTasks = 'task.publish';           // tandai task jadi publik
+
+    // Laporan & export
+    case ViewReports = 'report.view';
+    case ExportData = 'report.export';
 
     // Administration
     case ViewAccounts = 'account.view';
@@ -65,11 +101,35 @@ enum Permission: string
             self::DecideApproval => 'Approve / tolak / minta revisi',
             self::ViewVerification => 'Lihat antrean verifikasi',
             self::DecideVerification => 'Verifikasi konten',
+            self::ViewInteractions => 'Lihat inbox interaksi',
+            self::ViewAllInteractions => 'Lihat tugas seluruh petugas',
+            self::HandleInteractions => 'Tangani interaksi (balas & follow-up)',
+            self::AssignInteractions => 'Tugaskan interaksi ke petugas',
+            self::ViewContacts => 'Lihat database kontak',
+            self::ManageContacts => 'Kelola & lengkapi data kontak',
+            self::ManageAgents => 'Jadikan / cabut status agent',
             self::ViewCalendar => 'Lihat kalender',
             self::ManageCalendar => 'Ubah jadwal lewat kalender',
             self::ManageCalendarNotes => 'Tambah catatan & reminder di kalender',
             self::ViewDatasets => 'Lihat UT Monitoring Account',
             self::ManageDatasets => 'Unggah & kelola dataset',
+            self::ViewStudents => 'Lihat data mahasiswa',
+            self::ViewAllStudents => 'Lihat mahasiswa seluruh operator',
+            self::ManageStudents => 'Kelola & lengkapi data mahasiswa',
+            self::ImportStudents => 'Import data mahasiswa',
+            self::AssignStudents => 'Bagikan mahasiswa ke operator',
+            self::ViewTickets => 'Lihat tiket',
+            self::ViewAllTickets => 'Lihat tiket seluruh operator',
+            self::CreateTickets => 'Buat tiket',
+            self::HandleTickets => 'Tangani tiket (follow up & ubah status)',
+            self::AssignTickets => 'Tugaskan tiket ke operator',
+            self::CloseTickets => 'Tutup tiket',
+            self::ManageTicketCategories => 'Kelola kategori tiket',
+            self::ViewTasks => 'Lihat task management',
+            self::ManageTasks => 'Kelola task',
+            self::PublishTasks => 'Publikasikan task ke halaman publik',
+            self::ViewReports => 'Lihat laporan',
+            self::ExportData => 'Export data',
             self::ViewAccounts => 'Lihat akun sosmed',
             self::ManageAccounts => 'Kelola akun sosmed',
             self::ViewUsers => 'Lihat pengguna',

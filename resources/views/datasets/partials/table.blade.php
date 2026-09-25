@@ -283,7 +283,7 @@
             </div>
             <div class="col-span-2"><label class="label">Profile URL</label><input x-model="form.profile_url" class="input"></div>
             <div class="col-span-2 mt-2 flex justify-end gap-2">
-                <button type="button" @click="$dispatch('close-modal','add-row')" class="btn-outline">Cancel</button>
+                <button type="button" @click="$dispatch('close-modal','add-row')" class="btn-outline">Batal</button>
                 <button class="btn-primary"><x-icon name="check" class="w-4 h-4"/> Save row</button>
             </div>
         </form>

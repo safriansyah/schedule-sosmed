@@ -9,7 +9,10 @@ it('renders the login page with branding', function () {
     $this->get('/login')
         ->assertOk()
         ->assertSee('Masuk ke akun Anda')
-        ->assertSee(config('app.name'));
+        // The name is an admin setting now, falling back to config when
+        // unset — so the page shows whatever SiteBranding resolves, and
+        // asserting the raw config value would fail the moment it is changed.
+        ->assertSee(app(\App\Services\SiteBranding::class)->name());
 });
 
 it('logs a user in and shows the dashboard', function () {

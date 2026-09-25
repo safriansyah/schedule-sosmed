@@ -40,6 +40,10 @@ class PublishingService
      */
     public function publishDue(): array
     {
+        // Anything too far past its slot is failed BEFORE the normal run, so it
+        // surfaces in the UI with a reason instead of silently never happening.
+        $expired = $this->expireStale();
+
         $schedules = Schedule::due()
             ->whereHas('content', fn ($q) => $q->where('status', ContentStatus::Scheduled->value))
             ->with(['content.media', 'account'])
@@ -60,7 +64,53 @@ class PublishingService
             $this->publish($schedule) ? $published++ : $failed++;
         }
 
-        return ['attempted' => $attempted, 'published' => $published, 'failed' => $failed];
+        return [
+            'attempted' => $attempted,
+            'published' => $published,
+            'failed' => $failed,
+            'expired' => $expired,
+        ];
+    }
+
+    /**
+     * Mark schedules that are past the safe delay window as failed.
+     *
+     * Fails closed on purpose. A post is written for a moment; publishing a
+     * month-late promo as if it were current does more damage than not
+     * publishing it, and the operator can always reschedule from the UI.
+     *
+     * @return int  Rows expired.
+     */
+    public function expireStale(): int
+    {
+        $stale = Schedule::stale()
+            ->whereHas('content', fn ($q) => $q->where('status', ContentStatus::Scheduled->value))
+            ->with('content:id,title')
+            ->get();
+
+        foreach ($stale as $schedule) {
+            $late = $schedule->hoursLate();
+
+            $schedule->markFailed(sprintf(
+                'Dilewati otomatis: terlambat %s jam dari jadwal (batas aman %d jam). '
+                .'Periksa apakah kontennya masih relevan, lalu jadwalkan ulang.',
+                number_format($late, 1),
+                (int) config('publishing.max_delay_hours'),
+            ));
+
+            $schedule->content?->update(['status' => ContentStatus::Failed]);
+
+            Log::warning("Jadwal kedaluwarsa dilewati: {$schedule->content?->title} (telat {$late} jam)");
+
+            $this->log->log(
+                'schedule.expired',
+                "\"{$schedule->content?->title}\" dilewati — terlambat {$late} jam dari jadwal",
+                $schedule->content,
+                ['scheduled_at' => $schedule->scheduled_at?->toIso8601String(), 'hours_late' => $late],
+            );
+        }
+
+        return $stale->count();
     }
 
     /** Publish a single schedule. Returns true on success. */

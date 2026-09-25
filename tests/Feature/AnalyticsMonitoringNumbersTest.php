@@ -5,8 +5,6 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 
 uses(DatabaseTransactions::class);
 
-function admin(): User { return User::withRole(RoleName::SuperAdmin)->firstOrFail(); }
-
 it('renders the monitoring index with the full metric strip', function () {
     $this->actingAs(admin())
         ->get(route('monitoring.index'))

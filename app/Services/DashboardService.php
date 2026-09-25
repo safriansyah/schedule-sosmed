@@ -3,9 +3,13 @@
 namespace App\Services;
 
 use App\Enums\ContentStatus;
+use App\Enums\TicketStatus;
 use App\Models\AccountMedia;
 use App\Models\Content;
+use App\Models\Interaction;
 use App\Models\SocialAccount;
+use App\Models\Ticket;
+use App\Models\User;
 use App\Repositories\ContentRepository;
 use App\Services\Analytics\MetricsComparison;
 use Illuminate\Support\Carbon;
@@ -58,6 +62,12 @@ class DashboardService
             ['failed', 'Gagal / Batal', 'alert', 'rose', ContentStatus::Failed],
         ];
 
+        // Two grouped queries for all sixteen figures, rather than a COUNT per
+        // card per window. The dashboard is the most-loaded page in the app and
+        // this is on its critical path.
+        $current = $this->countsByStatus($from, $to);
+        $previous = $this->countsByStatus($prevFrom, $prevTo);
+
         $out = [];
 
         foreach ($cards as [$key, $label, $icon, $tone, $status]) {
@@ -66,20 +76,29 @@ class DashboardService
                 'icon' => $icon,
                 'tone' => $tone,
                 'status' => $status?->value,
-                'current' => $this->countCreated($from, $to, $status),
-                'previous' => $this->countCreated($prevFrom, $prevTo, $status),
+                // A null status means the "total" card, which sums every bucket.
+                'current' => $status ? ($current[$status->value] ?? 0) : array_sum($current),
+                'previous' => $status ? ($previous[$status->value] ?? 0) : array_sum($previous),
             ];
         }
 
         return $out;
     }
 
-    private function countCreated(Carbon $from, Carbon $to, ?ContentStatus $status): int
+    /**
+     * Content created in a window, counted per status in one query.
+     *
+     * @return array<string, int>
+     */
+    private function countsByStatus(Carbon $from, Carbon $to): array
     {
         return Content::query()
+            ->selectRaw('status, COUNT(*) as total')
             ->whereBetween('created_at', [$from, $to])
-            ->when($status, fn ($q) => $q->where('status', $status->value))
-            ->count();
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->map(fn ($total) => (int) $total)
+            ->all();
     }
 
     /** Content created per day in the window, split into published vs the rest. */
@@ -157,5 +176,49 @@ class DashboardService
     public function upcoming(int $limit = 5): Collection
     {
         return $this->contents->upcoming($limit);
+    }
+
+    /**
+     * Ticket counts for the dashboard, scoped to what this user may see.
+     *
+     * One grouped query rather than a count per status — this runs on every
+     * dashboard render.
+     *
+     * @return array<string, int>
+     */
+    public function ticketSummary(User $user): array
+    {
+        $counts = Ticket::query()
+            ->visibleTo($user)
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $summary = ['total' => (int) $counts->sum()];
+
+        foreach (TicketStatus::cases() as $status) {
+            $summary[$status->value] = (int) ($counts[$status->value] ?? 0);
+        }
+
+        $summary['mine'] = Ticket::where('assigned_to', $user->id)->open()->count();
+
+        return $summary;
+    }
+
+    /**
+     * How much of the social inbox has been turned into tickets.
+     *
+     * @return array<string, int>
+     */
+    public function socialTicketSummary(): array
+    {
+        $comments = Interaction::where('direction', 'inbound')->count();
+        $withTicket = Ticket::whereNotNull('interaction_id')->distinct()->count('interaction_id');
+
+        return [
+            'comments' => $comments,
+            'with_ticket' => $withTicket,
+            'without_ticket' => max(0, $comments - $withTicket),
+        ];
     }
 }

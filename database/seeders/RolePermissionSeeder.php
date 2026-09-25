@@ -14,9 +14,12 @@ class RolePermissionSeeder extends Seeder
     private const LEVELS = [
         'super_admin' => 100,
         'director' => 90,
+        'manager' => 80,
         'curator' => 60,
+        'pic' => 55,
         'verifier' => 50,
         'creative' => 30,
+        'operator' => 25,
     ];
 
     public function run(): void

@@ -5,6 +5,7 @@ namespace App\Services\Publishing;
 use App\Enums\SocialPlatform;
 use App\Models\AccountMetric;
 use App\Models\SocialAccount;
+use App\Services\Media\RemoteImageCache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -51,6 +52,12 @@ class AccountMetricsSync
 
         // Keep the account's own snapshot fresh too, so lists stay accurate.
         $account->forceFill([
+            // Refreshed on every run, not only at verification: the signed URL
+            // expires within days, so a value written once is stale almost
+            // immediately. Caching is skipped when we already hold a copy.
+            'avatar_url' => $profile['avatar'] ?? $account->avatar_url,
+            'avatar_path' => $account->avatar_path ?: app(RemoteImageCache::class)
+                ->store($profile['avatar'] ?? null, 'accounts', (string) $account->getKey()),
             'followers_count' => $profile['followers'],
             'media_count' => $profile['media_count'],
         ])->save();
@@ -76,7 +83,7 @@ class AccountMetricsSync
         $response = Http::withToken($account->access_token)
             ->timeout(20)
             ->get('https://graph.instagram.com/v21.0/me', [
-                'fields' => 'followers_count,follows_count,media_count',
+                'fields' => 'followers_count,follows_count,media_count,profile_picture_url',
             ]);
 
         if ($response->failed()) {
@@ -84,6 +91,7 @@ class AccountMetricsSync
         }
 
         return [
+            'avatar' => $response->json('profile_picture_url'),
             'followers' => (int) $response->json('followers_count', 0),
             'follows' => (int) $response->json('follows_count', 0),
             'media_count' => (int) $response->json('media_count', 0),

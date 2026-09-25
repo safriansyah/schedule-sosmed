@@ -34,13 +34,8 @@
         {{-- Media --}}
         <div class="space-y-6">
             <div class="card overflow-hidden">
-                @if ($media->thumbnail_url)
-                    <img src="{{ $media->thumbnail_url }}" alt="" class="aspect-square w-full object-cover">
-                @else
-                    <div class="grid aspect-square place-items-center bg-slate-100 text-slate-300 dark:bg-white/5">
-                        <x-icon name="image" class="h-10 w-10"/>
-                    </div>
-                @endif
+                <x-remote-image class="aspect-square w-full" :src="$media->thumbnail()"
+                                label="Foto belum tersimpan — akan muncul setelah sinkron berikutnya"/>
 
                 <div class="p-4">
                     <p class="flex flex-wrap items-center gap-1.5">
@@ -52,7 +47,7 @@
                     </p>
 
                     @if ($media->caption)
-                        <p class="mt-3 whitespace-pre-line text-sm text-slate-600 dark:text-slate-300">{{ $media->caption }}</p>
+                        <p class="mt-3 whitespace-pre-line break-words text-sm text-slate-600 dark:text-slate-300">{{ $media->caption }}</p>
                     @endif
                 </div>
             </div>
@@ -139,9 +134,7 @@
                         class="!py-8"/>
                 @endforelse
 
-                @if ($comments->hasPages())
-                    <div class="mt-4">{{ $comments->links() }}</div>
-                @endif
+                <div class="mt-4">{{ $comments->links() }}</div>
             </div>
 
             {{-- History chart --}}

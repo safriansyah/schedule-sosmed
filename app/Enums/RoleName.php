@@ -10,14 +10,48 @@ enum RoleName: string
     case Curator = 'curator';
     case Verifier = 'verifier';
 
+    /* CRM roles — these handle people, not content. */
+    case Manager = 'manager';
+    case Pic = 'pic';
+    case Operator = 'operator';
+
+    /**
+     * The name plus what the role is FOR, in brackets.
+     *
+     * "Manager" and "PIC" say nothing about which half of the system someone
+     * works in — this app runs two very different workflows (content
+     * production and student handling) and the same word means different jobs
+     * in each. The bracket is what makes a user list readable at a glance.
+     */
     public function label(): string
     {
         return match ($this) {
-            self::SuperAdmin => 'Super Admin',
-            self::Director => 'Direktur',
-            self::Creative => 'Tim Creative',
-            self::Curator => 'Approval / Curator',
-            self::Verifier => 'Tim Verifikasi',
+            self::SuperAdmin => 'Super Admin (Semua Akses)',
+            self::Director => 'Direktur (Pemantauan)',
+            self::Creative => 'Tim Creative (Konten)',
+            self::Curator => 'Approval / Curator (Konten)',
+            self::Verifier => 'Tim Verifikasi (Konten)',
+            self::Manager => 'Manager (Penanganan & Pembagian)',
+            self::Pic => 'PIC (Penanganan)',
+            self::Operator => 'Operator (Penanganan & Data)',
+        };
+    }
+
+    /** The name on its own, for places where the bracket would not fit. */
+    public function shortLabel(): string
+    {
+        return trim(str($this->label())->before('(')->toString());
+    }
+
+    /**
+     * Which side of the app this role lives on — used to group the user list.
+     */
+    public function area(): string
+    {
+        return match ($this) {
+            self::Creative, self::Curator, self::Verifier => 'Konten',
+            self::Manager, self::Pic, self::Operator => 'Penanganan',
+            default => 'Umum',
         };
     }
 
@@ -29,6 +63,9 @@ enum RoleName: string
             self::Creative => 'Membuat draft dan mengunggah media untuk ditinjau.',
             self::Curator => 'Meninjau konten: approve, tolak, minta revisi, dan menentukan jadwal terbit.',
             self::Verifier => 'Pengecekan akhir sebelum konten siap terbit.',
+            self::Manager => 'Membagi tugas, memantau SLA, dan mengeskalasi interaksi mendesak.',
+            self::Pic => 'Menangani dan membalas interaksi pada kanal yang menjadi tanggung jawabnya.',
+            self::Operator => 'Menangani interaksi, melengkapi data kontak, dan mengangkat agent baru.',
         };
     }
 
@@ -40,6 +77,9 @@ enum RoleName: string
             self::Creative => 'image',
             self::Curator => 'check-circle',
             self::Verifier => 'badge-check',
+            self::Manager => 'users',
+            self::Pic => 'headset',
+            self::Operator => 'user-plus',
         };
     }
 
@@ -77,6 +117,15 @@ enum RoleName: string
                 Permission::ViewAccounts,
                 Permission::ViewUsers,
                 Permission::ViewDatasets,
+                Permission::ViewInteractions,
+                Permission::ViewAllInteractions,
+                Permission::ViewContacts,
+                Permission::ViewStudents,
+                Permission::ViewAllStudents,
+                Permission::ViewTickets,
+                Permission::ViewAllTickets,
+                Permission::ViewTasks,
+                Permission::ViewReports,
             ],
 
             self::Creative => [
@@ -98,6 +147,85 @@ enum RoleName: string
                 ...$read,
                 Permission::ViewVerification,
                 Permission::DecideVerification,
+            ],
+
+            // Manager owns the queue but does not edit contact records: they
+            // distribute and escalate, operators do the data work.
+            self::Manager => [
+                ...$read,
+                Permission::ViewActivity,
+                Permission::ViewInteractions,
+                Permission::ViewAllInteractions,
+                Permission::HandleInteractions,
+                Permission::AssignInteractions,
+                Permission::ViewContacts,
+                Permission::ViewDatasets,
+
+                // The "Admin" of the CRM brief: imports the list, decides who
+                // gets what, runs ticketing and plans the team's work.
+                Permission::ViewStudents,
+                Permission::ViewAllStudents,
+                Permission::ManageStudents,
+                Permission::ImportStudents,
+                Permission::AssignStudents,
+                Permission::ViewTickets,
+                Permission::ViewAllTickets,
+                Permission::CreateTickets,
+                Permission::HandleTickets,
+                Permission::AssignTickets,
+                Permission::CloseTickets,
+                Permission::ManageTicketCategories,
+                Permission::ViewTasks,
+                Permission::ManageTasks,
+                Permission::PublishTasks,
+                Permission::ViewReports,
+                Permission::ExportData,
+            ],
+
+            // PIC answers; they may not reassign work or promote agents.
+            self::Pic => [
+                ...$read,
+                Permission::ViewInteractions,
+                Permission::HandleInteractions,
+                Permission::ViewContacts,
+
+                // No ViewAllStudents / ViewAllTickets: the scopes then restrict
+                // every list to this user's own assignments.
+                Permission::ViewStudents,
+                Permission::ViewTickets,
+                Permission::CreateTickets,
+                Permission::HandleTickets,
+                // Whoever works a ticket finishes it. Closing demands a
+                // resolution note and is the natural end of the follow-up the
+                // handler is already doing, so withholding it left a PIC able
+                // to do every step except the last — and left Operator, the
+                // field role, with MORE authority on the same flow. The
+                // restriction that is deliberate is reassignment, not closure.
+                Permission::CloseTickets,
+                Permission::ViewTasks,
+            ],
+
+            // Operator is the only non-admin role that may enrich a contact
+            // record and press "Jadikan Agent".
+            self::Operator => [
+                ...$read,
+                Permission::ViewInteractions,
+                Permission::HandleInteractions,
+                Permission::ViewContacts,
+                Permission::ManageContacts,
+                Permission::ManageAgents,
+
+                // Sees only what was assigned to them — the "viewAll" pair is
+                // deliberately absent, and the query scopes enforce it rather
+                // than the UI hiding buttons.
+                Permission::ViewStudents,
+                Permission::ManageStudents,
+                Permission::ViewTickets,
+                Permission::CreateTickets,
+                Permission::HandleTickets,
+                Permission::CloseTickets,
+                Permission::ViewTasks,
+                Permission::ExportData,
             ],
         };
     }

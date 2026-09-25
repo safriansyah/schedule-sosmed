@@ -53,4 +53,19 @@ return [
         'max_posts' => (int) env('DOLPHINRADAR_MAX_POSTS', 40),
     ],
 
+    /*
+    | Google Gemini — classifies incoming comments and DMs (sentiment, intent,
+    | urgency). Uses the free AI Studio tier; comments are sent in batches of
+    | ~25 per request, so ~100 comments a day costs a handful of calls.
+    |
+    | Only the message text is sent. No names, handles or phone numbers leave
+    | the app — see GeminiClassifier.
+    */
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
+        'base_url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 60),
+    ],
+
 ];

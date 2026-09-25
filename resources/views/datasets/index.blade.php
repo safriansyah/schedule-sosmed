@@ -179,7 +179,7 @@
                                value="{{ $d->description }}" placeholder="Short note about this dataset">
                     </div>
                     <div class="flex justify-end gap-2 pt-2">
-                        <button type="button" @click="$dispatch('close-modal','rename-dataset-{{ $d->id }}')" class="btn-outline">Cancel</button>
+                        <button type="button" @click="$dispatch('close-modal','rename-dataset-{{ $d->id }}')" class="btn-outline">Batal</button>
                         <button class="btn-primary"><x-icon name="check" class="w-4 h-4"/> Save name</button>
                     </div>
                 </form>

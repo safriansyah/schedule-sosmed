@@ -4,7 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? 'Masuk' }} · {{ config('app.name') }}</title>
+    <title>{{ $title ?? 'Masuk' }} · {{ $branding->name() }}</title>
+
+    @if ($branding->faviconUrl())
+        <link rel="icon" href="{{ $branding->faviconUrl() }}">
+    @endif
 
     <script>
         (function () {
@@ -35,7 +39,7 @@
                 <div class="grid h-11 w-11 place-items-center rounded-xl bg-white/15 backdrop-blur">
                     <x-icon name="chart" class="h-6 w-6"/>
                 </div>
-                <span class="text-lg font-bold">{{ config('app.name') }}</span>
+                <span class="text-lg font-bold">{{ $branding->name() }}</span>
             </div>
 
             <div class="relative text-white">
@@ -61,7 +65,7 @@
                 </div>
             </div>
 
-            <p class="relative text-xs text-white/50">© {{ date('Y') }} {{ config('app.name') }}</p>
+            <p class="relative text-xs text-white/50">© {{ date('Y') }} {{ $branding->name() }}</p>
         </div>
 
         {{-- Form panel --}}
@@ -76,7 +80,7 @@
                         <x-icon name="chart" class="h-7 w-7"/>
                     </div>
                     <h1 class="mt-4 text-2xl font-extrabold tracking-tight text-slate-800 dark:text-white">
-                        {{ config('app.name') }}
+                        {{ $branding->name() }}
                     </h1>
                 </div>
 

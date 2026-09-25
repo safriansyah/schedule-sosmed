@@ -35,6 +35,21 @@ class SocialAccount extends Model
         ];
     }
 
+    /**
+     * Profile picture to render — our own copy first.
+     *
+     * The remote URL is signed and expires within days, and it is only written
+     * when the account is verified, so it is stale almost immediately.
+     */
+    public function avatar(): ?string
+    {
+        if (filled($this->avatar_path)) {
+            return \Illuminate\Support\Facades\Storage::disk('public')->url($this->avatar_path);
+        }
+
+        return $this->avatar_url;
+    }
+
     public function schedules(): HasMany
     {
         return $this->hasMany(Schedule::class);

@@ -195,7 +195,27 @@ class MetricsComparison
         ];
     }
 
+    /**
+     * Per-request memo for the two snapshot lookups.
+     *
+     * Both are pure functions of (account, date), and one page asks for the
+     * same date several times over — the comparison needs window start and
+     * end, the totals strip needs today, and they overlap. Caching here turns
+     * a dozen identical aggregate queries into three. Scoped to the request,
+     * so it can never serve stale figures across page loads.
+     *
+     * @var array<string, mixed>
+     */
+    private array $memo = [];
+
     private function followersAt(SocialAccount $account, Carbon $date): int
+    {
+        $key = "followers:{$account->id}:{$date->toDateString()}";
+
+        return $this->memo[$key] ??= $this->fetchFollowersAt($account, $date);
+    }
+
+    private function fetchFollowersAt(SocialAccount $account, Carbon $date): int
     {
         return (int) AccountMetric::where('social_account_id', $account->id)
             ->where('captured_on', '<=', $date->toDateString())
@@ -237,6 +257,14 @@ class MetricsComparison
      * @return array<string, int>
      */
     private function mediaTotalsAt(SocialAccount $account, Carbon $date): array
+    {
+        $key = "media:{$account->id}:{$date->toDateString()}";
+
+        return $this->memo[$key] ??= $this->fetchMediaTotalsAt($account, $date);
+    }
+
+    /** @return array<string, int> */
+    private function fetchMediaTotalsAt(SocialAccount $account, Carbon $date): array
     {
         $latest = DB::table('media_metrics')
             ->selectRaw('account_media_id, MAX(captured_on) as captured_on')

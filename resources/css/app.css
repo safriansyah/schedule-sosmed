@@ -175,6 +175,55 @@
            hover:bg-brand-600 hover:text-white
            dark:bg-brand-600 dark:text-white dark:hover:bg-brand-600;
 }
+/* Second-level nav item. Lighter than nav-link so the hierarchy reads at a
+   glance without indentation alone doing all the work. */
+/* ---------------------------------------------------------------------------
+ | Paginasi — lihat resources/views/vendor/pagination/tailwind.blade.php
+ * ------------------------------------------------------------------------- */
+@utility pg-link {
+    @apply grid h-9 min-w-9 place-items-center rounded-lg px-2.5 text-sm font-semibold
+           text-slate-500 transition tabular-nums
+           hover:bg-slate-100 hover:text-slate-900
+           dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white;
+}
+
+@utility pg-active {
+    @apply bg-brand-600 text-white shadow-[0_6px_16px_-8px_rgb(124_58_237/0.9)]
+           hover:bg-brand-600 hover:text-white
+           dark:bg-brand-600 dark:text-white dark:hover:bg-brand-600;
+}
+
+@utility pg-arrow {
+    @apply grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition
+           ring-1 ring-slate-200 hover:bg-slate-100 hover:text-slate-900
+           dark:text-slate-400 dark:ring-white/10 dark:hover:bg-white/5 dark:hover:text-white;
+}
+
+/* Panah mati tetap terlihat agar lebar baris tidak berubah saat pindah halaman. */
+@utility pg-disabled {
+    @apply cursor-not-allowed opacity-35 hover:bg-transparent hover:text-slate-500
+           dark:hover:bg-transparent dark:hover:text-slate-400;
+}
+
+@utility pg-gap {
+    @apply grid h-9 w-6 place-items-center text-sm text-slate-300 dark:text-slate-600;
+}
+
+@utility pg-count {
+    @apply font-semibold text-slate-600 tabular-nums dark:text-slate-300;
+}
+
+@utility nav-sublink {
+    @apply flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium
+           text-slate-500 transition hover:bg-slate-100 hover:text-slate-900
+           dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white;
+}
+
+@utility nav-sublink-active {
+    @apply bg-brand-50 text-brand-700 hover:bg-brand-50 hover:text-brand-700
+           dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/10 dark:hover:text-brand-300;
+}
+
 @utility nav-section {
     @apply px-3.5 pt-5 pb-1 text-[10px] font-bold uppercase tracking-widest
            text-slate-400 dark:text-slate-600;

@@ -13,9 +13,38 @@
     </x-slot:header>
 
     @php
-        $expiring = $accounts->filter(fn ($a) => $a->token_expires_at
+        // Expired and expiring are different problems with different answers,
+        // so they get different banners. Lumping them together told someone
+        // whose token lapsed yesterday that it "will expire soon".
+        $expired = $accounts->filter->isTokenExpired();
+
+        $expiring = $accounts->reject->isTokenExpired()->filter(fn ($a) => $a->token_expires_at
             && $a->token_expires_at->lt(now()->addDays(\App\Services\Publishing\TokenRefresher::WARN_WITHIN_DAYS)));
+
+        // Only claim automatic renewal happens if the scheduler is actually
+        // alive. Promising a refresh that cannot run is how a token lapses
+        // while everyone assumes it is handled.
+        $schedulerAlive = app(\App\Services\SystemHealth::class)->lastRun()?->gt(now()->subMinutes(10)) ?? false;
     @endphp
+
+    @if ($expired->isNotEmpty())
+        <div class="card mb-5 border-rose-500/30 bg-rose-500/[0.06] p-4">
+            <div class="flex items-start gap-3">
+                <x-icon name="alert" class="mt-0.5 h-5 w-5 shrink-0 text-rose-500"/>
+                <div class="min-w-0 text-sm">
+                    <p class="font-semibold text-rose-600 dark:text-rose-400">Token sudah kedaluwarsa</p>
+                    <p class="mt-0.5 text-slate-600 dark:text-slate-300">
+                        {{ $expired->pluck('name')->implode(', ') }} —
+                        Instagram tidak bisa memperpanjang token yang sudah lewat.
+                        Buat token baru di Meta Developers, lalu tempelkan lewat tombol Ubah pada akun tersebut.
+                    </p>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Sinkron komentar, insight, dan penerbitan terjadwal berhenti untuk akun ini sampai tokennya diganti.
+                    </p>
+                </div>
+            </div>
+        </div>
+    @endif
 
     @if ($expiring->isNotEmpty())
         <div class="card mb-5 flex items-start gap-3 border-amber-200 bg-amber-50/60 p-4 dark:border-amber-500/20 dark:bg-amber-500/5">
@@ -24,7 +53,12 @@
                 <p class="font-semibold">Token akan segera kedaluwarsa</p>
                 <p class="mt-0.5">
                     {{ $expiring->pluck('name')->implode(', ') }} —
-                    perpanjangan otomatis berjalan tiap hari, tetapi jika gagal, perbarui token secara manual.
+                    @if ($schedulerAlive)
+                        perpanjangan otomatis berjalan tiap hari, tetapi jika gagal, perbarui token secara manual.
+                    @else
+                        <strong>penjadwal sedang tidak berjalan</strong>, jadi perpanjangan otomatis TIDAK akan terjadi.
+                        Jalankan <span class="font-mono text-xs">schedule:work</span> di server, atau perbarui token manual.
+                    @endif
                 </p>
             </div>
         </div>
@@ -35,16 +69,7 @@
         @foreach ($accounts as $account)
         <div class="card-glow p-5">
             <div class="flex items-start gap-3">
-                @if ($account->avatar_url)
-                    <img src="{{ $account->avatar_url }}" alt=""
-                         class="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-brand-500/40">
-                @else
-                    <span class="grid h-12 w-12 shrink-0 place-items-center rounded-full text-white"
-                          style="background: {{ $account->platform->color() }}">
-                        <x-icon :name="$account->platform->icon()" class="h-5 w-5"/>
-                    </span>
-                @endif
-
+                <x-account-avatar :account="$account" size="h-12 w-12"/>
                 <div class="min-w-0 flex-1">
                     <p class="truncate text-sm font-semibold text-slate-800 dark:text-white">{{ $account->name }}</p>
                     <p class="truncate text-xs text-slate-400">{{ $account->handle() }}</p>
@@ -58,10 +83,21 @@
                         @else
                             <span class="badge-slate">Nonaktif</span>
                         @endif
-                        @if ($account->token_expires_at)
+                        @if ($account->isTokenExpired())
+                            <span class="badge-red" title="Kedaluwarsa {{ $account->token_expires_at->translatedFormat('d M Y') }}">
+                                <x-icon name="alert" class="h-3 w-3"/> Token kedaluwarsa
+                            </span>
+                        @elseif ($account->token_expires_at)
                             <span class="{{ $account->token_expires_at->lt(now()->addDays(14)) ? 'badge-amber' : 'badge-slate' }}">
                                 <x-icon name="clock" class="h-3 w-3"/>
                                 Token {{ $account->token_expires_at->diffForHumans() }}
+                            </span>
+                        @elseif (data_get($account->meta, 'expiry_unknown_since'))
+                            {{-- Verified as working, but the platform would not
+                                 tell us how long it has left. Not a problem, so
+                                 not a warning colour. --}}
+                            <span class="badge-slate" title="{{ data_get($account->meta, 'expiry_note') }}">
+                                <x-icon name="help-circle" class="h-3 w-3"/> Masa berlaku tidak diketahui
                             </span>
                         @endif
                         @unless ($account->platform->isImplemented())
