@@ -1,0 +1,514 @@
+================================================================================
+ UT SOSMED MONITORING — ALUR DEPLOY KE SERVER
+ Untuk: orang yang memasang aplikasi ini di server (Ubuntu VPS atau cPanel).
+ Terakhir diperbarui: 25 September 2026
+================================================================================
+
+Baca bagian 0 dulu. Tiga hal di situ adalah yang paling sering bikin aplikasi
+"terpasang tapi tidak jalan", dan ketiganya tidak menampilkan pesan error.
+
+
+================================================================================
+ 0. TIGA HAL YANG PALING SERING TERLEWAT
+================================================================================
+
+  1. SATU BARIS CRON. Semua otomatisasi — terbit terjadwal, sinkron Instagram,
+     klasifikasi AI, pengingat task — menggantung pada satu entri cron. Kalau
+     tidak dipasang, TIDAK ADA error. Aplikasi terlihat sehat sambil diam-diam
+     tidak mengerjakan apa pun. Cek di Dashboard: panel "Otomasi".
+
+  2. DOCUMENT ROOT HARUS KE FOLDER public/. Kalau diarahkan ke folder utama,
+     seluruh isi kode (termasuk file .env berisi password database) bisa
+     diunduh siapa saja lewat browser.
+
+  3. APP_TIMEZONE=Asia/Jakarta. Bawaan Laravel adalah UTC dan berkas contoh
+     .env.example masih tertulis Africa/Lagos. Salah zona waktu = jadwal terbit
+     meleset berjam-jam, SLA salah hitung, pengingat task jam 07:30 bunyi di
+     waktu yang aneh. Tidak ada error, cuma angka yang salah.
+
+
+================================================================================
+ 1. YANG HARUS DISIAPKAN SEBELUM MULAI
+================================================================================
+
+ SERVER
+   - PHP 8.2 atau lebih baru (8.3 disarankan)
+   - MySQL 8 / MariaDB 10.6+
+   - Akses SSH  ............ WAJIB untuk Ubuntu, SANGAT disarankan untuk cPanel
+   - Domain + sertifikat SSL (HTTPS)
+
+ EKSTENSI PHP (di luar bawaan Laravel, dipakai aplikasi ini secara langsung)
+   - zip      -> membaca/menulis berkas .xlsx (import mahasiswa, export)
+   - xml      -> XMLReader, membaca .xlsx baris demi baris
+   - pdo_mysql, mbstring, openssl, tokenizer, ctype, json, fileinfo, bcmath, curl
+
+   Cek cepat:  php -m | grep -E "zip|xml|pdo_mysql|mbstring|curl"
+
+ YANG DISIAPKAN DARI SISI INSTITUSI
+   - Nama database, user, password
+   - Alamat domain final (mis. https://monitoring.institusi.ac.id)
+   - Access token Instagram Business (kalau fitur sosmed dipakai)
+   - API key AI untuk klasifikasi komentar — OPSIONAL.
+     Tanpa key, isi CRM_AI_DRIVER=rule; klasifikasi tetap jalan pakai aturan
+     kata kunci, hanya kurang halus. Aplikasi TIDAK rusak tanpa AI.
+   - Berkas Excel data mahasiswa (.xlsx) untuk diimpor pertama kali
+
+ CATATAN SOAL COMPOSER
+   Aplikasi ini hanya butuh tiga paket: laravel/framework, laravel/tinker,
+   halaxa/json-machine. Semuanya PHP murni. Tidak ada ekstensi aneh, tidak ada
+   PhpSpreadsheet, tidak butuh Redis.
+
+
+================================================================================
+ 2. DEPLOY KE UBUNTU (VPS) — JALUR YANG DISARANKAN
+================================================================================
+
+ 2.1  PASANG KEBUTUHAN DASAR
+      sudo apt update
+      sudo apt install -y nginx mysql-server git unzip \
+          php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml php8.3-zip \
+          php8.3-curl php8.3-bcmath
+      # Composer
+      curl -sS https://getcomposer.org/installer | php
+      sudo mv composer.phar /usr/local/bin/composer
+      # Node hanya untuk membangun aset (lihat 2.4)
+      curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+      sudo apt install -y nodejs
+
+ 2.2  SIAPKAN DATABASE
+      sudo mysql
+        CREATE DATABASE utsosmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        CREATE USER 'utsosmed'@'localhost' IDENTIFIED BY 'PASSWORD_KUAT_DI_SINI';
+        GRANT ALL PRIVILEGES ON utsosmed.* TO 'utsosmed'@'localhost';
+        FLUSH PRIVILEGES;
+        EXIT;
+
+ 2.3  AMBIL KODE
+      sudo mkdir -p /var/www/utsosmed
+      sudo chown -R $USER:www-data /var/www/utsosmed
+      cd /var/www/utsosmed
+      git clone <url-repo> .        # atau unggah lalu ekstrak
+
+      composer install --no-dev --optimize-autoloader
+
+ 2.4  BANGUN ASET TAMPILAN
+      npm ci
+      npm run build
+      # Menghasilkan public/build/. Setelah ini folder node_modules boleh
+      # dihapus — tidak dipakai saat aplikasi berjalan.
+
+ 2.5  KONFIGURASI
+      cp .env.example .env
+      php artisan key:generate
+
+      Lalu edit .env. Minimal yang WAJIB diubah dari bawaan:
+
+        APP_NAME="UT Sosmed Monitoring"
+        APP_ENV=production
+        APP_DEBUG=false                  <- WAJIB. true membocorkan isi .env
+                                            ke layar saat terjadi error.
+        APP_URL=https://domain-anda
+        APP_TIMEZONE=Asia/Jakarta        <- lihat bagian 0
+        APP_LOCALE=id
+
+        DB_DATABASE=utsosmed
+        DB_USERNAME=utsosmed
+        DB_PASSWORD=PASSWORD_KUAT_DI_SINI
+
+        SESSION_DRIVER=database
+        QUEUE_CONNECTION=database
+        CACHE_STORE=database
+        # Ketiganya pakai tabel MySQL. Tidak perlu Redis.
+
+        CRM_AI_DRIVER=rule               # atau groq / gemini bila ada key
+        GROQ_API_KEY=
+        GEMINI_API_KEY=
+
+        MAIL_MAILER=log                  # ganti ke smtp bila perlu kirim email
+
+ 2.6  SIAPKAN ISI DATABASE
+      php artisan migrate --force
+
+      # Data acuan yang WAJIB ada — bukan data contoh:
+      php artisan db:seed --class=RolePermissionSeeder --force   # role & izin
+      php artisan db:seed --class=RegionSeeder --force           # wilayah
+      php artisan db:seed --class=TicketCategorySeeder --force   # kategori tiket
+
+      # JANGAN jalankan "php artisan db:seed" tanpa --class di server produksi.
+      # Perintah itu membuat 14 akun dengan password "password". Lihat bagian 5.
+
+ 2.7  TAUTAN PENYIMPANAN PUBLIK
+      php artisan storage:link
+      # Dibutuhkan untuk: logo & favicon website, lampiran tiket, lampiran task,
+      # gambar Instagram yang di-cache. Tanpa ini semuanya tampil sebagai
+      # gambar rusak.
+
+ 2.8  HAK AKSES BERKAS
+      sudo chown -R www-data:www-data storage bootstrap/cache
+      sudo chmod -R 775 storage bootstrap/cache
+
+ 2.9  NGINX
+      server {
+          listen 80;
+          server_name domain-anda;
+          root /var/www/utsosmed/public;      # <- public/, bukan folder utama
+
+          index index.php;
+          charset utf-8;
+          client_max_body_size 32M;           # berkas .xlsx bisa belasan MB
+
+          location / { try_files $uri $uri/ /index.php?$query_string; }
+
+          location ~ \.php$ {
+              fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+              fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+              include fastcgi_params;
+              fastcgi_read_timeout 300;       # import 7.000+ baris butuh waktu
+          }
+
+          location ~ /\.(?!well-known).* { deny all; }
+      }
+
+      sudo ln -s /etc/nginx/sites-available/utsosmed /etc/nginx/sites-enabled/
+      sudo nginx -t && sudo systemctl reload nginx
+      sudo certbot --nginx -d domain-anda        # HTTPS
+
+ 2.10 CRON — SATU BARIS, WAJIB
+      sudo crontab -u www-data -e
+      Tambahkan:
+
+        * * * * * cd /var/www/utsosmed && php artisan schedule:run >> /dev/null 2>&1
+
+      Satu baris ini menjalankan 11 tugas terjadwal:
+        setiap menit  : detak sistem, terbit konten terjadwal, sinkron metrik akun
+        tiap jam      : insight postingan, cache gambar, bersihkan jadwal lama,
+                        cocokkan kontak
+        tiap 15 menit : klasifikasi komentar
+        tiap 5 jam    : sinkron komentar Instagram
+        02:00         : perpanjang token Instagram
+        07:30         : pengingat task jatuh tempo
+
+ 2.11 PEKERJA ANTREAN (QUEUE) — WAJIB KALAU PAKAI IMPORT MAHASISWA
+      Import Excel dijalankan di latar belakang. Tanpa pekerja antrean, import
+      berstatus "menunggu" selamanya.
+
+      sudo nano /etc/systemd/system/utsosmed-queue.service
+
+        [Unit]
+        Description=UT Sosmed queue worker
+        After=network.target
+
+        [Service]
+        User=www-data
+        Restart=always
+        RestartSec=5
+        ExecStart=/usr/bin/php /var/www/utsosmed/artisan queue:work \
+                  --sleep=3 --tries=3 --max-time=3600
+        [Install]
+        WantedBy=multi-user.target
+
+      sudo systemctl enable --now utsosmed-queue
+      sudo systemctl status utsosmed-queue
+
+ 2.12 OPTIMASI PRODUKSI (langkah terakhir)
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+
+      PENTING: setelah config:cache, berkas .env TIDAK dibaca lagi saat
+      aplikasi berjalan. Setiap kali .env diubah, WAJIB jalankan ulang
+      `php artisan config:cache` — kalau tidak, perubahan tidak berpengaruh
+      dan tidak ada pesan apa pun yang memberi tahu.
+
+
+================================================================================
+ 3. DEPLOY KE cPANEL (SHARED HOSTING)
+================================================================================
+
+ Bisa, tapi ada tiga keterbatasan yang harus diakui sejak awal:
+
+   - Node.js biasanya tidak ada       -> aset dibangun di komputer lokal
+   - Pekerja antrean tidak persisten  -> import dijalankan lewat cron
+   - Batas waktu eksekusi ketat       -> import berkas besar bisa terpotong
+
+ 3.1  BANGUN ASET DI KOMPUTER LOKAL DULU
+      npm ci
+      npm run build
+      # Ikutkan folder public/build/ saat mengunggah.
+      # composer install --no-dev juga sebaiknya dijalankan lokal, lalu folder
+      # vendor/ ikut diunggah — cPanel sering membatasi memori Composer.
+
+ 3.2  UNGGAH
+      Unggah SELURUH isi project ke folder di luar public_html, misalnya:
+
+        /home/USER/utsosmed/          <- seluruh kode di sini
+        /home/USER/public_html/       <- hanya isi folder public/
+
+      Cara paling aman di cPanel:
+        1. Unggah project ke /home/USER/utsosmed/
+        2. Pindahkan isi /home/USER/utsosmed/public/* ke /home/USER/public_html/
+        3. Edit /home/USER/public_html/index.php, ubah dua baris:
+
+             require __DIR__.'/../utsosmed/vendor/autoload.php';
+             $app = require_once __DIR__.'/../utsosmed/bootstrap/app.php';
+
+      JANGAN unggah seluruh project langsung ke public_html. Kalau itu
+      dilakukan, siapa pun bisa membuka https://domain-anda/.env dan membaca
+      password database Anda.
+
+ 3.3  DATABASE
+      Buat lewat menu "MySQL Databases" di cPanel, lalu isikan nama/user/
+      password ke .env.
+
+ 3.4  PERINTAH ARTISAN
+      Pakai Terminal cPanel bila tersedia. Kalau tidak ada, gunakan menu
+      "Setup PHP App" -> "Run Script", atau minta hosting mengaktifkan SSH.
+
+        php artisan key:generate
+        php artisan migrate --force
+        php artisan db:seed --class=RolePermissionSeeder --force
+        php artisan db:seed --class=RegionSeeder --force
+        php artisan db:seed --class=TicketCategorySeeder --force
+        php artisan storage:link
+
+      Kalau storage:link gagal (sering terjadi di shared hosting), buat
+      symlink manual lewat File Manager dari public_html/storage ke
+      ../utsosmed/storage/app/public
+
+ 3.5  CRON DI cPANEL
+      Menu "Cron Jobs" -> Every Minute (* * * * *):
+
+        cd /home/USER/utsosmed && /usr/local/bin/php artisan schedule:run >/dev/null 2>&1
+
+      Sesuaikan path PHP-nya; sebagian hosting memakai
+      /opt/cpanel/ea-php83/root/usr/bin/php
+
+ 3.6  ANTREAN TANPA PEKERJA PERSISTEN
+      Tambahkan cron kedua, setiap menit:
+
+        cd /home/USER/utsosmed && /usr/local/bin/php artisan queue:work --stop-when-empty --tries=3 >/dev/null 2>&1
+
+      ALTERNATIF kalau batas waktu hosting terlalu ketat: matikan antrean untuk
+      import dengan menambahkan ke .env
+
+        STUDENT_IMPORT_QUEUED=false
+
+      Import lalu berjalan langsung saat tombol ditekan. Risikonya nyata:
+      berkas 7.000+ baris bisa kena timeout di tengah jalan. Kalau itu terjadi,
+      pecah berkas Excel jadi beberapa bagian.
+
+ 3.7  BATAS UPLOAD
+      Di "MultiPHP INI Editor" naikkan:
+        upload_max_filesize = 32M
+        post_max_size       = 32M
+        max_execution_time  = 300
+        memory_limit        = 256M
+
+
+================================================================================
+ 4. MENGHAPUS DATA CONTOH
+================================================================================
+
+ Aplikasi dikirim berisi data contoh supaya layarnya bisa dinilai saat masih
+ kosong. Ada EMPAT kelompok, dan semuanya bertanda di database sehingga bisa
+ dihapus tanpa menyentuh data asli.
+
+ 4.1  LIHAT DULU APA YANG ADA (tidak menghapus apa pun)
+
+        php artisan demo:clear --dry-run
+
+      Contoh keluaran:
+
+        Data contoh yang ditemukan
+          Tiket contoh (extra.demo)                   3
+          Mahasiswa contoh DEMO00001                  1
+          Interaksi inbox (DEMO-…)                    12
+          Interaksi CRM (contoh-…)                    6
+          Kontak CRM [contoh]                         1
+          Task contoh (judul bawaan seeder)           4
+          Mahasiswa contoh StudentSeeder              0
+
+ 4.2  HAPUS
+
+        php artisan demo:clear
+        # akan bertanya konfirmasi; tambahkan --force untuk melewatinya
+
+ 4.3  KENAPA INI AMAN
+      Setiap baris dicocokkan lewat penanda yang ditulis seeder-nya sendiri —
+      NIM khusus, awalan external_id, tanda [contoh] pada catatan, flag
+      extra.demo — BUKAN lewat "dibuat baru-baru ini" atau "kelihatan seperti
+      data uji". Data asli tidak memiliki penanda itu dan tidak mungkin ikut
+      terhapus. Satu-satunya yang dicocokkan lewat judul adalah 4 task bawaan;
+      task yang sudah diganti judulnya sengaja dilewati.
+
+ 4.4  KALAU MAU MENGHAPUS SEBAGIAN SAJA
+        php artisan tickets:demo --clear        # 3 tiket contoh + mahasiswa DEMO00001
+        php artisan interactions:demo --clear   # 12 komentar contoh di inbox
+        php artisan crm:examples --clear        # kontak & interaksi bertanda [contoh]
+
+ 4.5  KALAU MAU MEMUNCULKANNYA LAGI (mis. untuk pelatihan staf)
+        php artisan interactions:demo
+        php artisan tickets:demo
+        php artisan crm:examples
+
+ 4.6  DATA MAHASISWA ASLI — JANGAN TERTUKAR
+      Perintah di atas TIDAK menyentuh mahasiswa hasil import. Untuk menghapus
+      satu batch import beserta isinya, gunakan filter "Asal data" di halaman
+      Data Mahasiswa untuk memastikan dulu isinya, lalu hapus lewat halaman
+      Import Data. Tidak ada perintah massal untuk ini — disengaja.
+
+
+================================================================================
+ 5. AKUN BAWAAN — INI YANG PALING BERISIKO
+================================================================================
+
+ Perintah `php artisan db:seed` (tanpa --class) membuat 14 akun, SEMUANYA
+ dengan password "password":
+
+   admin@example.com        super_admin      direktur@example.com     director
+   manager@example.com      manager          pic1@example.com         pic
+   pic2@example.com         pic              operator1@example.com    operator
+   operator2@example.com    operator         curator1@example.com     curator
+   curator2@example.com     curator          verifikator1@example.com verifier
+   verifikator2@example.com verifier         creative1@example.com    creative
+   creative2@example.com    creative         creative3@example.com    creative
+
+ UNTUK SERVER PRODUKSI, PILIH SALAH SATU:
+
+ A. (Disarankan) Jangan jalankan db:seed sama sekali. Buat satu admin sendiri:
+
+      php artisan tinker
+        $role = App\Models\Role::where('name','super_admin')->first();
+        $u = new App\Models\User;
+        $u->fill(['name'=>'Nama Admin','email'=>'admin@institusi.ac.id',
+                  'password'=>'PASSWORD-PANJANG-YANG-KUAT']);
+        $u->role_id = $role->id;
+        $u->is_active = true;
+        $u->save();
+
+    Akun berikutnya dibuat lewat menu Pengguna di aplikasi.
+
+ B. Kalau db:seed terlanjur dijalankan: ganti SEMUA 14 password lewat menu
+    Pengguna, dan nonaktifkan akun yang tidak dipakai. Jangan tinggalkan satu
+    pun akun berpassword "password" di server yang bisa diakses publik.
+
+
+================================================================================
+ 6. CHECKLIST VERIFIKASI SETELAH DEPLOY
+================================================================================
+
+  [ ] https://domain-anda membuka halaman login (bukan daftar berkas)
+  [ ] https://domain-anda/.env memberi 403/404 — BUKAN isi berkasnya
+  [ ] Bisa login, Dashboard terbuka
+  [ ] Dashboard -> panel "Otomasi" berbunyi "Otomasi berjalan normal"
+      (kalau "Belum pernah berdetak": cron belum jalan, tunggu 1 menit,
+       lalu periksa bagian 2.10 / 3.5)
+  [ ] Menu Pengaturan Sistem -> Identitas Website: unggah logo, tersimpan dan
+      tampil di sidebar  (kalau gambar rusak: storage:link belum jalan)
+  [ ] Data Mahasiswa -> Import Data: unggah .xlsx, statusnya sampai "selesai"
+      (kalau berhenti di "menunggu": pekerja antrean belum jalan, bagian 2.11 / 3.6)
+  [ ] Ticketing -> Format ID Tiket terbuka dan bisa disimpan
+  [ ] php artisan demo:clear --dry-run menunjukkan 0 di semua baris
+  [ ] Tidak ada akun berpassword "password" yang tersisa
+  [ ] Waktu di aplikasi sesuai WIB (cek stempel waktu di Aktivitas)
+
+
+================================================================================
+ 7. UPDATE / DEPLOY ULANG BERIKUTNYA
+================================================================================
+
+      cd /var/www/utsosmed
+      php artisan down                 # mode perbaikan
+
+      git pull
+      composer install --no-dev --optimize-autoloader
+      npm ci && npm run build          # hanya jika tampilan berubah
+      php artisan migrate --force
+
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+
+      sudo systemctl restart utsosmed-queue   # WAJIB: pekerja lama masih
+                                              # memegang kode versi sebelumnya
+      php artisan up
+
+ Di cPanel, langkah `systemctl restart` diganti dengan tidak melakukan apa-apa
+ (cron queue:work --stop-when-empty selalu memuat kode terbaru tiap menit).
+
+
+================================================================================
+ 8. BACKUP — SIAPKAN SEBELUM DIBUTUHKAN
+================================================================================
+
+ Dua hal yang perlu di-backup, dan keduanya perlu:
+
+   1. Database  -> seluruh data mahasiswa, tiket, follow up, riwayat
+        mysqldump -u utsosmed -p utsosmed | gzip > backup-$(date +%F).sql.gz
+
+   2. storage/app/public/  -> logo, favicon, lampiran tiket & task
+        tar czf storage-$(date +%F).tar.gz storage/app/public
+
+ Kode tidak perlu di-backup kalau ada di Git.
+
+ Cron backup harian:
+   0 1 * * * cd /var/www/utsosmed && mysqldump -u utsosmed -pPASSWORD utsosmed | gzip > /home/backup/db-$(date +\%F).sql.gz
+
+
+================================================================================
+ 9. MASALAH YANG SERING TERJADI
+================================================================================
+
+ "500 Server Error", layar putih
+   -> Lihat storage/logs/laravel.log
+   -> 90% kasus: hak akses storage/ dan bootstrap/cache/ (bagian 2.8)
+
+ Tampilan berantakan, tanpa warna
+   -> public/build/ belum ada. Jalankan npm run build, atau unggah folder itu
+      dari komputer lokal.
+
+ "Otomasi TIDAK berjalan" di Dashboard
+   -> Cron belum terpasang atau path PHP-nya salah. Uji manual:
+        cd /path/ke/app && php artisan schedule:run
+      Kalau manual berhasil tapi cron tidak, hampir selalu path PHP di cron
+      yang salah. Cari yang benar dengan: which php
+
+ Import mahasiswa berhenti di "menunggu"
+   -> Pekerja antrean belum jalan (bagian 2.11 / 3.6)
+
+ Logo/favicon/lampiran tampil rusak
+   -> php artisan storage:link belum dijalankan, atau symlink-nya hilang
+
+ Perubahan di .env tidak berpengaruh
+   -> php artisan config:cache belum dijalankan ulang (lihat 2.12)
+
+ Waktu meleset beberapa jam
+   -> APP_TIMEZONE belum Asia/Jakarta, atau config:cache belum diulang
+
+ Token Instagram kedaluwarsa terus
+   -> Cron tidak jalan, jadi tugas perpanjangan 02:00 tidak pernah dieksekusi.
+      Instagram tidak bisa memperpanjang token yang SUDAH lewat — harus dibuat
+      token baru lewat menu Akun Sosmed.
+
+
+================================================================================
+ 10. RINGKASAN PERINTAH — PASANG DARI NOL (UBUNTU)
+================================================================================
+
+  git clone <repo> /var/www/utsosmed && cd /var/www/utsosmed
+  composer install --no-dev --optimize-autoloader
+  npm ci && npm run build
+  cp .env.example .env && php artisan key:generate
+  nano .env                       # bagian 2.5
+  php artisan migrate --force
+  php artisan db:seed --class=RolePermissionSeeder --force
+  php artisan db:seed --class=RegionSeeder --force
+  php artisan db:seed --class=TicketCategorySeeder --force
+  php artisan storage:link
+  sudo chown -R www-data:www-data storage bootstrap/cache
+  sudo chmod -R 775 storage bootstrap/cache
+  php artisan config:cache && php artisan route:cache && php artisan view:cache
+  # buat admin (bagian 5A), pasang cron (2.10), pasang queue worker (2.11)
+  php artisan demo:clear --dry-run      # pastikan bersih sebelum diserahkan
+
+================================================================================
