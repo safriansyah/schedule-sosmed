@@ -563,6 +563,8 @@ bikin "di laptop saya jalan, di HP orang lain tidak".
  9. MEMBERSIHKAN DATA CONTOH
 ================================================================================
 
+ 9.1  HANYA DATA CONTOH (aplikasi tetap berisi data asli Anda)
+
      php artisan demo:clear --dry-run      <- lihat dulu, tidak menghapus
      php artisan demo:clear                <- hapus, dengan konfirmasi
 
@@ -582,6 +584,52 @@ bikin "di laptop saya jalan, di HP orang lain tidak".
      php artisan interactions:demo
      php artisan tickets:demo
      php artisan crm:examples
+
+
+ 9.2  MENGOSONGKAN SEMUA DATA OPERASIONAL (serah terima ke pemakaian asli)
+
+ Dipakai saat komputer sudah selesai disiapkan dan mau dimulai dari nol —
+ tetapi akun, role, izin, dan identitas website yang sudah Anda atur TETAP ADA.
+
+     php artisan data:reset --dry-run      <- lihat daftarnya dulu
+     php artisan data:reset                <- kosongkan, dengan konfirmasi
+
+ YANG DISIMPAN (8 tabel)
+     migrations          versi skema — dihapus = Laravel mengira DB masih kosong
+     users               akun pengguna
+     roles               daftar role
+     permissions         daftar izin
+     permission_role     izin per role
+     settings            identitas website (nama, logo, favicon) & format ID tiket
+     regions             data acuan wilayah (hasil seeder)
+     ticket_categories   kategori & sub kategori tiket (hasil seeder)
+
+ YANG DIKOSONGKAN (38 tabel) — yang penting disebut:
+     social_accounts     TOKEN Instagram IKUT TERHAPUS — memang ini yang
+                         diinginkan kalau mau menyambung ke akun lain
+     students            data mahasiswa hasil import
+     tickets, ticket_details, ticket_assignments, follow_ups
+     interactions, contacts, contact_identities
+     account_media, media_comments, media_metrics, account_metrics
+     contents, schedules, approvals, verifications, revisions, posts
+     tasks, task_checks, datasets, dataset_items, tags, taggables
+     activities          riwayat audit masa uji coba
+     notifications
+     sessions            semua orang harus login ulang setelahnya
+     cache, jobs, failed_jobs   aman, dibangun ulang sendiri
+
+ PERINGATAN: TRUNCATE tidak bisa dibatalkan. Backup dulu kalau ragu:
+     mysqldump -u root -p namadatabase > backup-sebelum-reset.sql
+
+ SETELAH RESET, urutannya:
+     1. Login ulang (sesi lama sudah dihapus)
+     2. Sambungkan akun Instagram BARU lewat menu Akun Sosmed
+     3. Import data mahasiswa lewat menu Import Data
+     4. Periksa: php artisan data:reset --dry-run
+        Semua baris di bagian DIKOSONGKAN harus menunjukkan 0
+
+ CATATAN: perintah ini hanya ada di terminal, tidak ada tombolnya di aplikasi.
+ Penghapusan satu arah tidak pantas berada di balik satu klik.
 
 
 ================================================================================
