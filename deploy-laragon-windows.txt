@@ -737,3 +737,11 @@ bikin "di laptop saya jalan, di HP orang lain tidak".
   php artisan demo:clear --dry-run
 
 ================================================================================
+cd C:\laragon\www\schedule-sosmed
+
+php artisan accounts:sync-metrics      # 1. follower dll — cepat
+php artisan accounts:sync-insights     # 2. POSTINGAN — ini yang wajib duluan
+php artisan accounts:sync-comments     # 3. KOMENTAR — butuh langkah 2
+php artisan interactions:classify      # 4. penilaian AI
+php artisan contacts:resolve           # 5. cocokkan komentator ke kontak
+php artisan media:cache                # 6. simpan thumbnail lokal
