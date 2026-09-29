@@ -81,8 +81,8 @@ class ReportController extends Controller
             ->visibleTo($user)
             ->when(filled($filters['source'] ?? null), fn ($q) => $q->where('source', $filters['source']))
             ->when(filled($filters['stage'] ?? null), fn ($q) => $q->whereIn('status', TicketStatus::inStage($filters['stage'])))
-            ->when(filled($filters['from'] ?? null), fn ($q) => $q->whereDate('tickets.created_at', '>=', $filters['from']))
-            ->when(filled($filters['to'] ?? null), fn ($q) => $q->whereDate('tickets.created_at', '<=', $filters['to']))
+            ->when($this->date($filters['from'] ?? null), fn ($q, $d) => $q->whereDate('tickets.created_at', '>=', $d))
+            ->when($this->date($filters['to'] ?? null), fn ($q, $d) => $q->whereDate('tickets.created_at', '<=', $d))
             ->regionOf($filters);
 
         $byStatus = $base()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
@@ -155,8 +155,8 @@ class ReportController extends Controller
     {
         $this->authorize(Permission::ViewReports->value);
 
-        $from = $request->filled('from') ? Carbon::parse($request->input('from')) : now()->startOfMonth();
-        $to = $request->filled('to') ? Carbon::parse($request->input('to')) : now()->endOfMonth();
+        $from = $this->date($request->input('from')) ?? now()->startOfMonth();
+        $to = $this->date($request->input('to')) ?? now()->endOfMonth();
 
         if ($to->lt($from)) {
             $to = $from->copy()->endOfMonth();
@@ -246,6 +246,27 @@ class ReportController extends Controller
     /* -----------------------------------------------------------------
      | Internals
      * ----------------------------------------------------------------- */
+
+    /**
+     * A date from the query string, or null when it is not one.
+     *
+     * Carbon::parse() THROWS on something like "2030-99-99", and a date typed
+     * by hand or produced by a date picker in another locale is exactly what
+     * arrives here. A report is a read-only page; it must degrade to its
+     * default window, not to a 500.
+     */
+    private function date(mixed $value): ?Carbon
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
 
     /**
      * Tickets per region, at the deepest level the data actually carries.

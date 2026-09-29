@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Rules\NotABrokenHash;
 use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,7 +52,7 @@ class SettingsController extends Controller
     {
         $request->validate([
             'current_password' => ['required', 'current_password'],
-            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+            'password' => ['required', 'confirmed', new NotABrokenHash, Password::min(8)->letters()->numbers()],
         ], [
             'current_password.required' => 'Kata sandi saat ini wajib diisi.',
             'current_password.current_password' => 'Kata sandi saat ini salah.',
@@ -60,7 +61,7 @@ class SettingsController extends Controller
         ]);
 
         $user = $request->user();
-        $user->password = Hash::make($request->input('password'));
+        $user->password = $request->input('password');
         $user->save();
 
         $this->log->log('user.password_changed', 'Kata sandi diubah', $user);

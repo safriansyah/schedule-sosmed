@@ -80,6 +80,20 @@
                        autocomplete="new-password" class="input" placeholder="••••••••">
             </div>
         </div>
+
+        {{-- Said out loud because there is no way to tell from the form that a
+             pasted hash was understood as a hash rather than stored as the
+             literal password. --}}
+        <p class="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[11px] text-slate-500 dark:bg-white/[0.03] dark:text-slate-400">
+            <x-icon name="shield" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400"/>
+            <span>
+                Boleh juga menempel <span class="font-semibold">hash bcrypt</span> yang sudah jadi
+                (awalan <span class="font-mono">$2y$</span>, <span class="font-mono">$2a$</span>,
+                atau <span class="font-mono">$2b$</span>, tepat 60 karakter) — disimpan apa adanya,
+                tidak di-hash dua kali. Tempel di kedua kolom supaya cocok.
+                Kalau tertempel sebagian, form akan menolak, bukan menyimpannya diam-diam.
+            </span>
+        </p>
     </div>
 
     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

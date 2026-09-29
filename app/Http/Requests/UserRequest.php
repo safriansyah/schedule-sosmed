@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\Permission;
+use App\Rules\NotABrokenHash;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -29,9 +30,16 @@ class UserRequest extends FormRequest
             'role_id' => ['required', 'exists:roles,id'],
 
             // Password is required on create, optional on update.
+            //
+            // A complete bcrypt hash may be pasted here instead of a password
+            // — it satisfies the strength rules on its own (60 characters,
+            // letters and numbers), so no exception is needed for it. What
+            // does need catching is a hash that arrived in pieces; see the
+            // rule.
             'password' => [
                 $user ? 'nullable' : 'required',
                 'confirmed',
+                new NotABrokenHash,
                 Password::min(8)->letters()->numbers(),
             ],
 

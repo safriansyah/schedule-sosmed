@@ -56,7 +56,11 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac\" \"php artisan serve --host=127.0.0.1 --port=5566\" \"php artisan queue:listen --tries=1\" \"php artisan schedule:work\" --names=server,queue,cron --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan schedule:work\" --names=server,queue,cron --kill-others"
+        ],
+        "dev:lan": [
+            "Composer\\Config::disableProcessTimeout",
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac\" \"php artisan serve --host=0.0.0.0\" \"php artisan queue:listen --tries=1\" \"php artisan schedule:work\" --names=server,queue,cron --kill-others"
         ],
         "dev:ui": [
             "npm run dev"

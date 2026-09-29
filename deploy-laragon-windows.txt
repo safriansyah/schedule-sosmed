@@ -1,0 +1,691 @@
+================================================================================
+ UT SOSMED MONITORING — DEPLOY DI WINDOWS 10 + LARAGON (SERVER INTRANET)
+ Untuk: orang yang menyiapkan satu komputer Windows jadi server, diakses
+        perangkat lain lewat WiFi kantor. Tidak dari internet.
+ Pelengkap deploy-flow.txt (itu untuk Ubuntu/cPanel).
+ Terakhir diperbarui: 28 September 2026
+================================================================================
+
+Anda sudah punya: Laragon, Node, Git, PHP 8.2, MySQL 8.4.3, phpMyAdmin.
+Itu sudah cukup. Tidak ada yang perlu dipasang lagi.
+
+Yang belum ada hanyalah PENGATURAN — dan empat di antaranya adalah hal yang
+bikin "di laptop saya jalan, di HP orang lain tidak".
+
+
+================================================================================
+ 0. TIGA HAL YANG BIKIN GAGAL DI JARINGAN — BACA INI DULU
+================================================================================
+
+ Kabar baiknya: `composer run dev` MEMANG menjalankan semuanya sekaligus —
+ web, antrean, dan penjadwal. Tidak perlu Apache, tidak perlu Task Scheduler.
+ Hanya ada satu masalah, dan sudah diperbaiki: lihat nomor 1.
+
+ 1. PAKAI `composer run dev:lan`, BUKAN `composer run dev`.
+    Script `dev` bawaan mengikat ke 127.0.0.1, yang artinya "hanya komputer
+    ini" — dari HP seWiFi alamatnya tidak menjawab sama sekali. Sudah
+    ditambahkan script kedua, `dev:lan`, yang isinya sama persis tetapi
+    mengikat ke 0.0.0.0 (semua alamat).
+
+    Diukur di komputer ini:
+       port 5566 dengan `dev`      -> LocalAddress 127.0.0.1 -> dari IP LAN GAGAL
+       port 5567 dengan --host=0.0.0.0 -> LocalAddress 0.0.0.0 -> dari IP LAN HTTP 200
+
+    `dev` sengaja dibiarkan apa adanya supaya laptop pengembang tidak
+    diam-diam terbuka ke jaringan sekitar. Yang membuka ke jaringan adalah
+    keputusan sadar, dengan perintah yang berbeda.
+
+ 2. APP_URL HARUS ALAMAT IP, BUKAN localhost.
+    Logo, favicon, dan lampiran tiket dibuatkan alamat dari APP_URL
+    (config/filesystems.php: 'url' => env('APP_URL').'/storage'). Kalau APP_URL
+    masih http://localhost, maka di HP penguji semua gambar itu menunjuk ke
+    localhost MILIK HP ITU SENDIRI — jadi gambar rusak semua, padahal di
+    komputer server terlihat normal.
+
+ 3. KOMPUTER SERVER TIDAK BOLEH SLEEP.
+    Windows tidur = server mati, penjadwal mati, antrean mati. Tidak ada pesan
+    apa pun. Lihat bagian 7.
+
+ CATATAN SOAL KECEPATAN (angka nyata, bukan perkiraan)
+    Server bawaan PHP memproses permintaan bergiliran. Diukur di komputer ini,
+    halaman /students dengan 7.392 mahasiswa:
+
+        1 permintaan                        0,53 detik
+        3 orang klik bersamaan   total 1,2 detik
+        6 orang klik bersamaan   total 2,2 detik
+       12 orang klik bersamaan   total 4,0 detik
+       20 orang klik bersamaan   total 6,5 detik      (semua berhasil, 0 error)
+
+    Artinya: untuk 5–10 penguji yang membuka halaman dengan kecepatan manusia
+    biasa, `composer run dev:lan` sudah cukup dan tidak akan terasa lambat.
+    Yang menunggu lama hanya kalau belasan orang menekan tombol pada detik
+    yang sama persis.
+
+    Kalau nanti dipakai puluhan orang sehari-hari, barulah pindah ke Apache
+    (bagian 3C) — itu peningkatan, bukan syarat.
+
+================================================================================
+ 1. SIAPKAN PROJECT
+================================================================================
+
+ JANGAN MENYALIN .env DARI KOMPUTER LAIN.
+ Isinya khusus per komputer: nama database, password MySQL, APP_KEY, APP_URL,
+ dan port. Menyalinnya adalah penyebab nomor satu error "Access denied" dan
+ "Unknown database" saat pindah mesin. Selalu mulai dari `copy .env.example .env`
+ lalu isi ulang.
+
+
+ Taruh project di folder www Laragon, misalnya:
+
+     C:\laragon\www\schedule-sosmed
+
+ Buka Terminal Laragon (Menu > Terminal, atau klik kanan > Laragon Terminal)
+ lalu:
+
+     cd C:\laragon\www\schedule-sosmed
+
+     composer install
+     npm install
+     npm run build          <- WAJIB. Tanpa ini tampilan tanpa warna sama sekali.
+
+     copy .env.example .env
+     php artisan key:generate
+
+
+================================================================================
+ 2. DATABASE
+================================================================================
+
+ Lewat phpMyAdmin (http://localhost/phpmyadmin), buat database baru:
+
+     Nama      : utsosmed
+     Collation : utf8mb4_unicode_ci
+
+ Lalu isi di .env:
+
+     DB_CONNECTION=mysql
+     DB_HOST=127.0.0.1
+     DB_PORT=3306
+     DB_DATABASE=utsosmed
+     DB_USERNAME=root
+     DB_PASSWORD=<<< LIHAT DI BAWAH — INI SERING SALAH >>>
+
+ PASSWORD ROOT: TERGANTUNG MySQL MANA YANG DIPAKAI
+ ------------------------------------------------------------------------------
+   MySQL BAWAAN LARAGON      -> root TANPA password. Biarkan DB_PASSWORD kosong.
+   MySQL DIINSTAL SENDIRI    -> root PUNYA password. Installer MySQL menanyakan
+   (mis. MySQL 8.4.3 dari       password root saat pemasangan. Isikan password
+    installer resmi)            itu ke DB_PASSWORD.
+
+   Kalau dua-duanya terpasang, yang menjawab di port 3306 adalah yang servisnya
+   jalan duluan — dan itu belum tentu yang Anda kira.
+
+ CARA MEMASTIKAN, sebelum menjalankan aplikasi:
+
+     mysql -u root -p -h 127.0.0.1 -e "select current_user(), version();"
+
+   Diminta password lalu berhasil -> isi password itu ke DB_PASSWORD
+   Berhasil dengan ENTER kosong   -> DB_PASSWORD dibiarkan kosong
+   ERROR 1698 / 1045              -> password salah; lihat bagian 11
+
+ DISARANKAN: JANGAN PAKAI root
+ ------------------------------------------------------------------------------
+ Buat user khusus aplikasi. Kalau passwordnya bocor, yang terbuka hanya satu
+ database, bukan seluruh MySQL. Lewat phpMyAdmin > User accounts > Add user
+ account, atau lewat terminal:
+
+     mysql -u root -p
+       CREATE DATABASE utsosmed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+       CREATE USER 'utsosmed'@'localhost' IDENTIFIED BY 'PasswordKuat123';
+       CREATE USER 'utsosmed'@'127.0.0.1' IDENTIFIED BY 'PasswordKuat123';
+       GRANT ALL PRIVILEGES ON utsosmed.* TO 'utsosmed'@'localhost';
+       GRANT ALL PRIVILEGES ON utsosmed.* TO 'utsosmed'@'127.0.0.1';
+       FLUSH PRIVILEGES;
+
+   Dua baris user itu memang perlu keduanya: MySQL menganggap 'localhost'
+   (lewat socket/pipe) dan '127.0.0.1' (lewat TCP) sebagai HOST BERBEDA, dan
+   Laravel memakai 127.0.0.1.
+
+   Lalu di .env:
+       DB_USERNAME=utsosmed
+       DB_PASSWORD=PasswordKuat123
+
+ CATATAN MySQL 8.4: versi ini menghapus dukungan mysql_native_password secara
+ bawaan. Laravel tidak bermasalah dengan itu. Tapi kalau muncul error
+ "authentication plugin cannot be loaded", buat user baru dengan autentikasi
+ caching_sha2_password dan pakai user itu.
+
+ Kemudian:
+
+     php artisan migrate --force
+     php artisan db:seed --class=RolePermissionSeeder --force
+     php artisan db:seed --class=RegionSeeder --force
+     php artisan db:seed --class=TicketCategorySeeder --force
+     php artisan storage:link
+
+ JANGAN jalankan `php artisan db:seed` polos. Perintah itu membuat 14 akun
+ berpassword "password". Lihat bagian 8.
+
+ CATATAN storage:link DI WINDOWS: perintah ini membuat symbolic link, dan
+ Windows butuh izin khusus. Kalau gagal:
+   - Buka Terminal Laragon sebagai Administrator, lalu ulangi, ATAU
+   - Aktifkan Developer Mode (Settings > Update & Security > For developers)
+ Kalau tetap gagal, salin manual: buat folder C:\laragon\www\schedule-sosmed\
+ public\storage dan isi dengan isi storage\app\public. (Cara ini tidak ikut
+ ter-update otomatis, jadi symlink lebih baik.)
+
+
+================================================================================
+ 3. MEMBUAT KOMPUTER INI BISA DIAKSES LEWAT WIFI
+================================================================================
+
+ 3.1  CARI ALAMAT IP KOMPUTER SERVER
+
+      Buka Command Prompt, ketik:
+
+          ipconfig
+
+      Cari baris "IPv4 Address" pada adapter WiFi (atau Ethernet kalau pakai
+      kabel). Contoh: 192.168.1.10
+
+      Alamat inilah yang nanti dibuka penguji: http://192.168.1.10
+
+ 3.2  KUNCI IP-NYA SUPAYA TIDAK BERUBAH
+
+      IP dari WiFi biasanya berubah sendiri setelah beberapa jam atau setelah
+      restart. Kalau berubah, semua penguji kehilangan akses tanpa sebab yang
+      jelas. Dua cara:
+
+      A. (Lebih baik) Di router: fitur "DHCP Reservation" / "Static Lease" —
+         ikat MAC address komputer server ke satu IP tetap.
+
+      B. Di Windows: Settings > Network & Internet > WiFi > pilih jaringan >
+         IP assignment > Edit > Manual > isi IP, subnet 255.255.255.0,
+         gateway = IP router, DNS = IP router.
+         Pilih IP di luar rentang DHCP router supaya tidak bentrok.
+
+ ------------------------------------------------------------------------------
+ 3A. CARA UTAMA — `composer run dev:lan`  (ini yang dipakai)
+ ------------------------------------------------------------------------------
+
+      cd C:\laragon\www\schedule-sosmed
+      composer run dev:lan
+
+      Satu perintah, tiga proses sekaligus, dan bisa diakses dari WiFi:
+
+         server  -> php artisan serve --host=0.0.0.0 --port=5566
+         queue   -> php artisan queue:listen --tries=1     (untuk import Excel)
+         cron    -> php artisan schedule:work              (pengganti cron)
+
+      Penguji membuka: http://192.168.1.10:5566
+
+      Biarkan jendela terminalnya TERBUKA selama validasi. Menutupnya
+      mematikan ketiganya sekaligus (memang begitu desainnya: --kill-others).
+
+      Kalau salah satu proses mati, semuanya ikut berhenti — itu disengaja,
+      supaya tidak ada keadaan setengah jalan yang membingungkan. Jalankan
+      ulang perintahnya.
+
+ ------------------------------------------------------------------------------
+ 3B. MENGGANTI PORT (atau host) — CUKUP DI .env
+ ------------------------------------------------------------------------------
+
+      Port TIDAK lagi ditanam di composer.json. `php artisan serve` membacanya
+      dari .env, jadi satu tempat saja:
+
+          SERVER_HOST=127.0.0.1     # 0.0.0.0 supaya bisa diakses dari jaringan
+          SERVER_PORT=5566          # ganti ke 8000 atau berapa pun
+
+      Ingin pindah ke 8000? Ubah satu baris:
+
+          SERVER_PORT=8000
+
+      lalu jalankan ulang `composer run dev:lan`. Alamatnya jadi
+      http://192.168.1.10:8000 — dan jangan lupa APP_URL (3.4) serta aturan
+      firewall (3.3) ikut disesuaikan ke port yang baru.
+
+      Diuji: dengan SERVER_PORT=5571 dan tanpa flag apa pun, `php artisan serve`
+      membuka 127.0.0.1:5571. Jadi nilainya benar-benar terbaca dari .env.
+
+      Kalau port bentrok dengan aplikasi lain, `artisan serve` otomatis mencoba
+      port berikutnya (5567, 5568, …) dan menuliskan port yang akhirnya dipakai
+      di terminal. Perhatikan baris "Server running on" saat start.
+
+      Menjalankan manual di tiga terminal terpisah juga boleh:
+
+         php artisan serve --host=0.0.0.0 --port=8000
+         php artisan queue:work
+         php artisan schedule:work
+
+ ------------------------------------------------------------------------------
+ 3C. OPSIONAL — APACHE LARAGON (kalau nanti dipakai puluhan orang)
+ ------------------------------------------------------------------------------
+
+      Apache melayani banyak permintaan sekaligus dan jalan sebagai layanan,
+      jadi tidak bergantung pada jendela terminal yang terbuka. Ini BUKAN
+      syarat untuk hari validasi.
+
+      1. Menu Laragon > Apache > httpd.conf, arahkan DocumentRoot ke
+            "C:/laragon/www/schedule-sosmed/public"
+
+      2. Menu Laragon > Stop All, lalu Start All.
+
+      3. Penguji membuka http://192.168.1.10  (tanpa :5566)
+
+      4. Antrean dan penjadwal TETAP harus dijalankan sendiri — Apache hanya
+         melayani web. Buka dua terminal:
+            php artisan queue:work
+            php artisan schedule:work
+         atau pasang Task Scheduler (bagian 6).
+
+ 3.3  IZINKAN LEWAT WINDOWS FIREWALL
+
+      Ini langkah yang paling sering terlupa. Tanpa ini, dari komputer server
+      bisa dibuka, dari HP tidak bisa sama sekali.
+
+      Buka PowerShell SEBAGAI ADMINISTRATOR:
+
+          New-NetFirewallRule -DisplayName "UT Sosmed HTTP" -Direction Inbound `
+              -Protocol TCP -LocalPort 80 -Action Allow -Profile Private
+
+      Untuk cara 3A (composer run dev:lan) portnya 5566:
+
+          New-NetFirewallRule -DisplayName "UT Sosmed 5566" -Direction Inbound `
+              -Protocol TCP -LocalPort 5566 -Action Allow -Profile Private
+
+      Untuk cara 3C (Apache) portnya 80, seperti perintah di atas.
+
+      CATATAN: mengikat ke 0.0.0.0 saja TIDAK cukup. Itu membuat aplikasi mau
+      menerima dari jaringan; firewall Windows-lah yang memutuskan boleh atau
+      tidak. Keduanya harus beres.
+
+      -Profile Private artinya hanya berlaku di jaringan yang ditandai
+      "Private". Pastikan WiFi kantor ditandai Private, bukan Public:
+      Settings > Network & Internet > WiFi > klik nama jaringan >
+      Network profile > Private.
+
+ 3.4  SETEL APP_URL — JANGAN DILEWAT
+
+      Di .env:
+
+          APP_URL=http://192.168.1.10
+
+      (pakai :5566 kalau memakai cara 3A, tanpa port kalau memakai Apache)
+
+      Lalu WAJIB:
+
+          php artisan config:clear
+
+      Tanpa ini, logo dan lampiran rusak di semua perangkat selain komputer
+      server. Lihat bagian 0 nomor 3.
+
+ 3.5  UJI DARI HP
+
+      Sambungkan HP ke WiFi yang sama, buka http://192.168.1.10
+      Harus muncul halaman login.
+
+      Kalau tidak bisa:
+        - Ping dulu dari HP (pakai aplikasi ping) atau dari laptop lain:
+              ping 192.168.1.10
+          Tidak membalas  -> masalah jaringan/isolasi WiFi, bukan aplikasi
+          Membalas        -> masalah firewall atau Apache
+        - Sebagian router punya fitur "AP Isolation" / "Client Isolation" yang
+          memblokir perangkat saling terhubung. Matikan di pengaturan router.
+
+
+================================================================================
+ 3.6  BERAPA BERAT SEBENARNYA — SUPAYA TIDAK SALAH KHAWATIR
+================================================================================
+
+ Sistem ini dipakai internal, maksimal sekitar 10 orang, untuk mengelola
+ konten. Yang banyak bukan jumlah pengguna, melainkan scraping, komentar, dan
+ penilaian AI. Dua beban itu berjalan di TEMPAT YANG BERBEDA, dan itu kabar
+ baik:
+
+   HALAMAN WEB  <- yang dipakai 10 orang
+      Ringan. Diukur: 0,5 detik per halaman; 12 orang klik bersamaan selesai
+      dalam 4 detik, tanpa error. 10 orang yang membuka halaman dengan
+      kecepatan manusia biasa tidak akan pernah menunggu.
+
+   SCRAPING & AI  <- yang volumenya besar
+      TIDAK lewat halaman web, dan TIDAK lewat antrean. Semuanya berjalan di
+      dalam proses `schedule:work` (kolom "cron" di composer run dev:lan):
+
+        tiap menit    metrik akun
+        tiap jam      insight postingan, cache gambar, cocokkan kontak
+        tiap 15 menit klasifikasi AI — maksimum 200 interaksi per putaran
+        tiap 5 jam    sinkron komentar Instagram
+
+      Artinya panggilan AI yang lambat memperlambat PENJADWAL, bukan halaman
+      yang sedang dibuka orang. Aplikasinya tetap responsif.
+
+   ANTREAN (queue)  <- hanya import Excel
+      Import data mahasiswa saja. Jarang dipakai, tapi harus tetap hidup atau
+      import berhenti di status "menunggu".
+
+ KAPASITAS KLASIFIKASI AI
+   200 interaksi per 15 menit = sekitar 800 per jam = sekitar 19.000 per hari.
+   Jauh di atas kebutuhan. Kalau suatu saat tunggakannya menumpuk, naikkan
+   `crm.ai.per_run_limit` — tapi perhatikan batas kuota Groq, bukan kecepatan
+   komputernya, yang biasanya jadi penghalang duluan.
+
+   Cek tunggakan kapan saja:
+       php artisan tinker --execute="echo App\Models\Interaction::whereNull('ai_classified_at')->count();"
+
+ KESIMPULAN: untuk 10 orang, `composer run dev:lan` sudah lebih dari cukup.
+ Apache (3C) baru relevan kalau nanti dipakai puluhan orang bersamaan.
+
+
+================================================================================
+ 4. .env UNTUK SERVER INTRANET — RINGKASAN
+================================================================================
+
+     APP_NAME="UT Sosmed Monitoring"
+     APP_ENV=production
+     APP_DEBUG=false                 <- WAJIB false. true menampilkan isi .env
+                                        (termasuk password DB) ke layar penguji
+                                        setiap kali ada error.
+     APP_URL=http://192.168.1.10:5566  <- IP komputer server + port, lihat 3.4
+
+     SERVER_HOST=0.0.0.0             <- supaya bisa diakses dari WiFi
+     SERVER_PORT=5566                <- ganti port di sini, lihat 3B
+     APP_TIMEZONE=Asia/Jakarta       <- .env.example masih Africa/Lagos
+     APP_LOCALE=id
+
+     DB_DATABASE=utsosmed
+     DB_USERNAME=root
+     DB_PASSWORD=
+
+     SESSION_DRIVER=database
+     QUEUE_CONNECTION=database
+     CACHE_STORE=database
+
+     CRM_AI_DRIVER=groq              <- sesuai rencana Anda
+     GROQ_API_KEY=isi-key-nya
+
+ Setelah mengubah .env, selalu:
+
+     php artisan config:clear
+
+ (Jangan pakai config:cache di komputer yang masih sering diubah-ubah — kalau
+ sudah di-cache, perubahan .env tidak terbaca sampai di-cache ulang, dan tidak
+ ada pesan apa pun yang memberi tahu.)
+
+
+================================================================================
+ 5. MENJALANKAN
+================================================================================
+
+ SATU PERINTAH, sudah termasuk semuanya:
+
+     cd C:\laragon\www\schedule-sosmed
+     composer run dev:lan
+
+ Yang berjalan di baliknya:
+
+   server  http://0.0.0.0:5566        web, terjangkau dari WiFi
+   queue   php artisan queue:listen   import Excel data mahasiswa
+   cron    php artisan schedule:work  11 tugas terjadwal, pengganti cron
+
+ Cara memastikan ketiganya hidup:
+   - Buka http://<IP>:5566 dari HP           -> halaman login muncul (server)
+   - Dashboard > panel "Otomasi"             -> "Otomasi berjalan normal" (cron)
+   - Import satu file Excel kecil            -> statusnya sampai "selesai" (queue)
+
+ JANGAN TUTUP jendela terminalnya selama validasi.
+
+ Untuk pemakaian tetap (server nyala terus, tanpa ada yang login), pakai
+ Apache + Task Scheduler — bagian 3C dan 6.
+
+================================================================================
+ 6. CRON DI WINDOWS — TASK SCHEDULER (untuk pemakaian tetap)
+================================================================================
+
+ `schedule:work` mati kalau jendelanya ditutup atau komputer di-restart. Untuk
+ server yang dipakai terus, pakai Task Scheduler supaya jalan sendiri tanpa
+ ada yang login.
+
+ 6.1  BUAT FILE BANTU
+      Buat C:\laragon\www\schedule-sosmed\run-scheduler.bat berisi:
+
+          @echo off
+          cd /d C:\laragon\www\schedule-sosmed
+          C:\laragon\bin\php\php-8.2.x\php.exe artisan schedule:run
+
+      (sesuaikan nama folder php-8.2.x dengan yang ada di komputer Anda —
+       cek di C:\laragon\bin\php\)
+
+      Dan run-queue.bat berisi:
+
+          @echo off
+          cd /d C:\laragon\www\schedule-sosmed
+          C:\laragon\bin\php\php-8.2.x\php.exe artisan queue:work --stop-when-empty --tries=3
+
+ 6.2  DAFTARKAN DI TASK SCHEDULER
+      Buka "Task Scheduler" > Create Task (bukan Create Basic Task).
+
+      Tab General:
+        Name        : UT Sosmed Scheduler
+        [v] Run whether user is logged on or not
+        [v] Run with highest privileges
+
+      Tab Triggers > New:
+        Begin the task   : On a schedule
+        Daily, recur every 1 days
+        [v] Repeat task every : 1 minute
+            for a duration of : Indefinitely
+
+      Tab Actions > New:
+        Action  : Start a program
+        Program : C:\laragon\www\schedule-sosmed\run-scheduler.bat
+
+      Tab Settings:
+        [v] Run task as soon as possible after a scheduled start is missed
+        [ ] Stop the task if it runs longer than...   (HILANGKAN centangnya)
+
+      Ulangi seluruhnya untuk run-queue.bat dengan nama "UT Sosmed Queue".
+
+ 6.3  UJI
+      Klik kanan task > Run. Lalu buka Dashboard aplikasi, panel "Otomasi"
+      harus berbunyi "Otomasi berjalan normal" dalam 1 menit.
+
+
+================================================================================
+ 7. SETELAN WINDOWS AGAR TIDAK MATI SENDIRI
+================================================================================
+
+  Settings > System > Power & sleep:
+     Screen : boleh mati
+     Sleep  : NEVER            <- kalau komputer tidur, server mati total
+
+  Control Panel > Power Options > Change plan settings > Advanced:
+     Hard disk > Turn off hard disk after : Never
+     USB settings > USB selective suspend : Disabled
+     (kalau pakai WiFi) Wireless Adapter Settings > Power Saving Mode :
+        Maximum Performance
+
+  Matikan juga "Fast Startup" supaya Laragon benar-benar start ulang bersih:
+     Control Panel > Power Options > Choose what the power buttons do >
+     Change settings that are currently unavailable >
+     hilangkan centang "Turn on fast startup"
+
+  Laragon otomatis jalan saat Windows nyala:
+     Laragon > Menu > Preferences > centang "Run Laragon when Windows starts"
+     dan "Start all services automatically"
+
+
+================================================================================
+ 8. AKUN & PASSWORD
+================================================================================
+
+ 8.1  BUAT ADMIN SENDIRI (jangan pakai db:seed polos)
+
+      php artisan tinker
+
+        $role = App\Models\Role::where('name','super_admin')->first();
+        $u = new App\Models\User;
+        $u->fill(['name'=>'Nama Admin','email'=>'admin@institusi.ac.id',
+                  'password'=>'PASSWORD-PANJANG-YANG-KUAT']);
+        $u->role_id = $role->id;
+        $u->is_active = true;
+        $u->save();
+
+      Akun berikutnya dibuat lewat menu Pengguna di aplikasi.
+
+ 8.2  MENEMPEL HASH BCRYPT DARI GENERATOR ONLINE — SUDAH DIDUKUNG
+
+      Di kolom "Kata sandi" (menu Pengguna, dan di tinker seperti di atas),
+      Anda boleh menempel hash bcrypt yang sudah jadi, bukan kata sandinya:
+
+          $2y$10$...   (60 karakter)
+          $2a$10$...   <- yang paling umum dari generator online
+          $2b$12$...
+
+      Aplikasi menyimpannya apa adanya, TIDAK di-hash dua kali, dan pemilik
+      akun bisa login dengan kata sandi aslinya.
+
+      Catatan penting:
+        - Tempel string yang SAMA PERSIS di kolom "Kata sandi" dan "Ulangi
+          kata sandi". Dua hash dari kata sandi yang sama akan berbeda (salt-nya
+          acak), jadi kalau Anda men-generate dua kali, form akan menolak.
+        - Kalau tertempel sebagian saja, form MENOLAK dengan pesan jelas —
+          tidak akan menyimpannya diam-diam sebagai kata sandi biasa.
+        - Prefix $2a$/$2b$ otomatis dinormalkan ke $2y$. Digest-nya tidak
+          berubah sama sekali; ini hanya penanda versi.
+
+      Pertimbangan keamanan, sekali saja: mengetik kata sandi asli ke situs
+      generator pihak ketiga berarti situs itu tahu kata sandi Anda. Untuk akun
+      uji coba tidak masalah. Untuk akun asli, lebih baik ketik langsung di
+      form aplikasi — hasilnya sama.
+
+
+================================================================================
+ 9. MEMBERSIHKAN DATA CONTOH
+================================================================================
+
+     php artisan demo:clear --dry-run      <- lihat dulu, tidak menghapus
+     php artisan demo:clear                <- hapus, dengan konfirmasi
+
+ Mencakup keempat kelompok sekaligus: tiket contoh, komentar inbox contoh,
+ kontak/interaksi CRM bertanda [contoh], task bawaan, dan mahasiswa DEMO00001.
+
+ Aman karena setiap baris dicocokkan lewat penanda yang ditulis seeder-nya
+ sendiri — bukan lewat "dibuat baru-baru ini". Data mahasiswa hasil import
+ Anda dan tiket sungguhan tidak tersentuh.
+
+ Sebagian saja:
+     php artisan tickets:demo --clear
+     php artisan interactions:demo --clear
+     php artisan crm:examples --clear
+
+ Memunculkannya lagi (untuk latihan staf):
+     php artisan interactions:demo
+     php artisan tickets:demo
+     php artisan crm:examples
+
+
+================================================================================
+ 10. CHECKLIST SEBELUM HARI VALIDASI
+================================================================================
+
+  [ ] npm run build sudah dijalankan (tampilan berwarna, bukan teks polos)
+  [ ] APP_DEBUG=false dan APP_URL=http://<IP>  lalu php artisan config:clear
+  [ ] APP_TIMEZONE=Asia/Jakarta, jam di menu Aktivitas sesuai WIB
+  [ ] Dijalankan dengan `composer run dev:lan` (BUKAN `composer run dev`)
+  [ ] SERVER_PORT di .env cocok dengan port di APP_URL dan di aturan firewall
+  [ ] Buka http://<IP>:5566 dari HP lain yang seWiFi -> halaman login muncul
+  [ ] Login dari HP, buka Dashboard, logo tampil (bukan gambar rusak)
+  [ ] Dashboard > panel Otomasi = "Otomasi berjalan normal"
+  [ ] queue:work berjalan; uji import satu file Excel kecil sampai "selesai"
+  [ ] php artisan demo:clear --dry-run menunjukkan 0 semua (kalau data contoh
+      tidak ingin ikut dinilai)
+  [ ] Tidak ada akun berpassword "password"
+  [ ] Windows tidak sleep; Laragon auto-start
+  [ ] IP sudah dikunci (DHCP reservation atau IP statis)
+  [ ] Catat alamatnya di papan/kertas: http://192.168.1.10
+
+
+================================================================================
+ 11. MASALAH YANG SERING TERJADI
+================================================================================
+
+ Dari HP tidak bisa dibuka, dari komputer server bisa
+   -> Tiga kemungkinan, cek berurutan:
+      1. Masih pakai `composer run dev` (127.0.0.1). Pakai `dev:lan` (3A)
+      2. Firewall Windows belum diizinkan (3.3)
+      3. AP Isolation aktif di router (3.5)
+
+ Gambar/logo rusak di HP tapi normal di komputer server
+   -> APP_URL masih localhost. Perbaiki lalu php artisan config:clear (3.4)
+
+ Aplikasi terasa lambat kalau banyak orang klik bersamaan
+   -> Wajar sampai batas tertentu: lihat angka di bagian 0. Kalau belasan
+      orang memakai terus-menerus, pindah ke Apache (3C)
+
+ Import Excel berhenti di "menunggu"
+   -> queue:work tidak berjalan (bagian 5 nomor 2)
+
+ Panel Otomasi merah / "Belum pernah berdetak"
+   -> schedule:work tidak berjalan (bagian 5 nomor 3), atau Task Scheduler
+      belum aktif (bagian 6)
+
+ Tampilan polos tanpa warna
+   -> npm run build belum dijalankan, atau folder public/build terhapus
+
+ "The stream or file storage/logs/laravel.log could not be opened"
+   -> Jalankan Terminal Laragon sebagai Administrator, atau beri izin tulis
+      penuh pada folder storage
+
+ Perubahan .env tidak berpengaruh
+   -> php artisan config:clear
+
+ SQLSTATE[HY000] [1698] Access denied for user 'root'@'localhost'
+   -> BUKAN bug aplikasi. MySQL menolak kredensial di .env.
+      Penyebab paling sering: memakai MySQL yang diinstal sendiri (yang root-nya
+      PUNYA password) tetapi DB_PASSWORD di .env dibiarkan kosong — biasanya
+      karena .env disalin dari komputer lain yang pakai MySQL bawaan Laragon.
+
+      Uji dulu di luar aplikasi, supaya jelas siapa yang salah:
+          mysql -u root -p -h 127.0.0.1 -e "select current_user();"
+
+      Berhasil  -> password itu yang harus ditulis di DB_PASSWORD
+      Gagal juga -> masalahnya murni di MySQL, bukan di aplikasi
+
+      Setelah memperbaiki .env:
+          php artisan config:clear
+      lalu jalankan ulang `composer run dev:lan`.
+
+      Kode 1698 khusus berarti "password tidak dikirim tetapi akun ini
+      memerlukannya". Kode 1045 berarti password dikirim tetapi salah.
+
+ SQLSTATE[HY000] [1049] Unknown database 'xxx'
+   -> Databasenya belum dibuat di komputer ini. Buat dulu lewat phpMyAdmin
+      (bagian 2). Nama database di .env harus sama persis dengan yang dibuat —
+      .env yang disalin dari komputer lain sering masih memakai nama lama.
+
+ Semua jadi lambat setelah beberapa jam
+   -> Cek Task Manager: kalau banyak proses php.exe menumpuk, kemungkinan
+      Task Scheduler menjalankan queue tanpa --stop-when-empty
+
+
+================================================================================
+ 12. RINGKASAN PERINTAH
+================================================================================
+
+  cd C:\laragon\www\schedule-sosmed
+  composer install
+  npm install && npm run build
+  copy .env.example .env
+  php artisan key:generate
+  # edit .env: APP_ENV, APP_DEBUG, APP_URL, APP_TIMEZONE, DB_*, GROQ_API_KEY
+  php artisan migrate --force
+  php artisan db:seed --class=RolePermissionSeeder --force
+  php artisan db:seed --class=RegionSeeder --force
+  php artisan db:seed --class=TicketCategorySeeder --force
+  php artisan storage:link
+  php artisan config:clear
+  # buat admin (8.1), firewall (3.3), APP_URL (3.4)
+  composer run dev:lan          # server + queue + cron sekaligus
+  php artisan demo:clear --dry-run
+
+================================================================================

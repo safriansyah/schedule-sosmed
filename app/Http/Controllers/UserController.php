@@ -49,7 +49,8 @@ class UserController extends Controller
         $user = new User;
 
         $user->fill($request->safe()->only('name', 'email', 'phone'));
-        $user->password = Hash::make($request->input('password'));
+        // Raw: the model decides whether to hash it or store a pasted hash.
+        $user->password = $request->input('password');
 
         // Guarded against mass assignment — set explicitly.
         $user->role_id = $request->integer('role_id');
@@ -79,7 +80,7 @@ class UserController extends Controller
         $user->fill($request->safe()->only('name', 'email', 'phone'));
 
         if (filled($request->input('password'))) {
-            $user->password = Hash::make($request->input('password'));
+            $user->password = $request->input('password');
         }
 
         $user->role_id = $request->integer('role_id');
