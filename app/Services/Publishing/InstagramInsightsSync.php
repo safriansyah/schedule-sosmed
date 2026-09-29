@@ -131,10 +131,24 @@ class InstagramInsightsSync
         ];
 
         for ($page = 0; $page < self::MAX_PAGES && $url !== null; $page++) {
-            // `paging.next` is already a full, signed URL — send it as-is.
+            // Every page carries the token, including the ones reached through
+            // `paging.next`.
+            //
+            // That URL looks signed and IS on the Facebook Graph API, which
+            // embeds access_token in its paging links. graph.instagram.com does
+            // not: it returns
+            //   https://graph.instagram.com/v26.0/<id>/media?fields=…&after=…
+            // with no credential at all, and relies on the Authorization
+            // header. Sending it bare produced "Invalid OAuth 2.0 Access Token"
+            // (code 190) on page two of every account with more than 50 posts —
+            // page one stored fine, so it read as a token problem rather than a
+            // paging one.
+            //
+            // An absolute URL bypasses the client's baseUrl, so passing it to
+            // the same $client keeps the header and the full link.
             $response = $page === 0
                 ? $client->get($url, $params)
-                : Http::timeout(30)->get($url);
+                : $client->get($url);
 
             if ($response->failed()) {
                 throw new RuntimeException('Gagal mengambil daftar media: '.str($response->body())->limit(160));
