@@ -1,9 +1,11 @@
 <?php
 
-use App\Enums\RoleName;
-use App\Models\{Activity, User};
+use App\Enums\{ContactStatus, RoleName};
+use App\Models\{Activity, Contact, User};
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 uses(DatabaseTransactions::class);
 
@@ -106,6 +108,41 @@ it('shows a compact position indicator for narrow screens', function () {
 
 it('keeps the pagination on the pages that carry no other count', function () {
     $admin = User::withRole(RoleName::SuperAdmin)->firstOrFail();
+
+    // A row on each page first.
+    //
+    // The pagination component renders nothing when there is no data, which is
+    // correct and has its own test above. So on an emptied database this test
+    // and that one contradicted each other, and this one lost — it was
+    // asserting "the summary is always there" against three pages that had
+    // nothing to summarise.
+    DB::table('activities')->insert([
+        'id' => (string) Str::uuid(),
+        'user_id' => $admin->id,
+        'action' => 'uji.pagination',
+        'description' => 'Baris untuk menguji ringkasan halaman',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('notifications')->insert([
+        'id' => (string) Str::uuid(),
+        'type' => 'App\Notifications\UjiPagination',
+        'notifiable_type' => User::class,
+        'notifiable_id' => $admin->id,
+        'data' => json_encode(['message' => 'Uji ringkasan halaman']),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // An agent is defined by status, not by agent_since -- scopeAgents()
+    // filters on ContactStatus::Agent, and a contact with only the date set
+    // never appears on the page.
+    Contact::query()->whereNull('merged_into_id')->limit(1)->update([
+        'status' => ContactStatus::Agent->value,
+        'agent_code' => 'UJI-01',
+        'agent_since' => now(),
+    ]);
 
     foreach (['activities.index', 'notifications.index', 'contacts.agents'] as $route) {
         $this->actingAs($admin)

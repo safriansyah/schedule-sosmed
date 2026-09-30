@@ -861,6 +861,54 @@ Lalu WAJIB:
     DatabaseSeeder lengkap, yang ikut memasukkan data contoh mahasiswa & tugas.
 
 --------------------------------------------------------------------------------
+PENTING: KONTEN TERJADWAL TIDAK BISA TERBIT DARI SERVER INTRANET
+--------------------------------------------------------------------------------
+
+Periksa sendiri:   php artisan content:check-publish
+
+Instagram TIDAK menerima file gambarnya. Ia menerima sebuah URL, lalu server
+Instagram yang mengunduh sendiri file itu. Kalau aplikasi dipasang di jaringan
+lokal, URL yang dikirim berbentuk:
+
+    http://10.15.10.221:5566/storage/media/foto.jpg
+
+Alamat 10.x.x.x hanya ada di dalam kantor. Server Instagram di internet tidak
+akan pernah bisa menjangkaunya, jadi kontainer media tidak pernah terbentuk dan
+konten terjadwal SELALU gagal.
+
+Ini bukan salah konfigurasi yang bisa diperbaiki dengan pengaturan. Begitulah
+cara kerja API penerbitan Instagram.
+
+Yang tetap BERJALAN NORMAL di intranet:
+    - scraping postingan & komentar      (aplikasi yang menghubungi Instagram)
+    - penilaian AI
+    - ticketing, data mahasiswa, task management, laporan
+    - monitoring & analitik
+
+Yang TIDAK bisa:
+    - menerbitkan konten otomatis ke Instagram
+
+TIGA PILIHAN
+
+  a. TERBITKAN MANUAL (paling sederhana, disarankan untuk intranet)
+     Pakai sistem ini untuk merencanakan jadwal, menyiapkan caption dan media,
+     lalu unggah manual lewat aplikasi Instagram pada waktunya. Semua fungsi
+     lain tetap jalan penuh.
+
+  b. BUKA AKSES MEDIA KE INTERNET
+     Pasang Cloudflare Tunnel atau ngrok yang mengarah ke komputer server, lalu
+     isi APP_URL dengan alamat publik dari tunnel itu:
+
+         APP_URL=https://sosmed-ut.trycloudflare.com
+         php artisan config:clear
+
+     Catatan: alamat itu harus tetap hidup saat jadwal terbit tiba.
+
+  c. PASANG DI HOSTING PUBLIK
+     Lihat deploy-flow.txt (cPanel / Ubuntu). Ini satu-satunya cara penerbitan
+     otomatis berjalan tanpa syarat tambahan.
+
+--------------------------------------------------------------------------------
 KALAU KOMPUTER MATI, LALU DINYALAKAN LAGI
 --------------------------------------------------------------------------------
 
