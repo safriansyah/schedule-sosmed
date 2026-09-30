@@ -6,11 +6,30 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 
 uses(DatabaseTransactions::class);
 
-it('grants calendar-note permission to every role', function () {
+it('grants calendar-note permission to every role that sees the calendar', function () {
+    // Roles that hold the permission, not every role there is. "Operator Follow
+// Up" deliberately does without the read baseline the other roles share — its
+// whole job is following up its own tickets — so iterating RoleName::cases()
+// here would assert that a restricted role is not restricted.
     foreach (RoleName::cases() as $role) {
-        expect(User::withRole($role)->firstOrFail()->hasPermission(Permission::ManageCalendarNotes))
+        $user = User::withRole($role)->firstOrFail();
+
+        if (! $user->hasPermission(Permission::ViewCalendar)) {
+            continue;
+        }
+
+        expect($user->hasPermission(Permission::ManageCalendarNotes))
             ->toBeTrue("role {$role->value} should be able to add calendar notes");
     }
+});
+
+it('keeps the follow-up role out of the calendar entirely', function () {
+    // Both halves: it cannot read the calendar, so it must not be able to
+    // write notes onto it either.
+    $user = User::withRole(RoleName::FollowUp)->firstOrFail();
+
+    expect($user->hasPermission(Permission::ViewCalendar))->toBeFalse();
+    expect($user->hasPermission(Permission::ManageCalendarNotes))->toBeFalse();
 });
 
 it('limits UT Monitoring Account to admin and director only', function () {

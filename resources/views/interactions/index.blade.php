@@ -1,7 +1,20 @@
-<x-layouts.app title="Inbox Interaksi">
+@php
+    // Which queue you are looking at, named in the heading and the browser tab.
+    // Without it every tab rendered the same title, so arriving from a sidebar
+    // badge told you a number but not which filter produced it — and the tab
+    // bar sits below the fold on a phone.
+    $tabLabel = $tabs[$tab][0] ?? null;
+@endphp
+
+<x-layouts.app :title="'Inbox Interaksi'.($tabLabel ? ' — '.$tabLabel : '')">
     <x-slot:header>
         <div class="min-w-0">
-            <h1 class="text-xl font-extrabold tracking-tight text-slate-800 dark:text-white">Inbox Interaksi</h1>
+            <h1 class="text-xl font-extrabold tracking-tight text-slate-800 dark:text-white">
+                Inbox Interaksi
+                @if ($tabLabel)
+                    <span class="font-bold text-slate-400">({{ $tabLabel }})</span>
+                @endif
+            </h1>
             <p class="mt-0.5 text-sm text-slate-400">
                 Komentar &amp; pesan dari semua kanal, dinilai otomatis lalu ditangani.
             </p>

@@ -1,0 +1,308 @@
+================================================================================
+ UT SOSMED MONITORING — SELURUH TUGAS OTOMATIS (CRON / SCHEDULER)
+ Diperbarui: 30 September 2026
+================================================================================
+
+Dokumen ini untuk orang yang menjaga server: apa yang berjalan sendiri, kapan,
+kenapa frekuensinya segitu, dan apa yang rusak kalau tidak berjalan.
+
+
+--------------------------------------------------------------------------------
+ 0. YANG PALING PENTING DIPAHAMI DULU
+--------------------------------------------------------------------------------
+
+Aplikasi ini TIDAK memasang 14 cron di sistem operasi. Hanya ada SATU pemicu,
+dan Laravel yang memutuskan tugas mana yang jatuh tempo tiap menit.
+
+Di Windows / Laragon (komputer server internal):
+
+    composer run dev:lan
+
+  Satu perintah ini menjalankan tiga proses sekaligus:
+    server  -> php artisan serve --host=0.0.0.0     (web)
+    queue   -> php artisan queue:listen             (pekerjaan latar belakang)
+    cron    -> php artisan schedule:work            (penjadwal, PENGGANTI cron)
+
+  Jendela itu tidak boleh ditutup. Ketiganya memakai --kill-others: kalau satu
+  mati, dua lainnya ikut mati. Untuk komputer yang menyala 24 jam tanpa ada
+  yang login, pakai Task Scheduler (deploy-laragon-windows.txt bagian 6).
+
+Di Linux / cPanel:
+
+    * * * * * cd /path/ke/app && php artisan schedule:run >> /dev/null 2>&1
+
+  SATU baris. Jangan membuat cron terpisah per tugas.
+
+Catatan teknis: semua tugas di routes/console.php memakai Schedule::call() +
+Artisan::call(), bukan Schedule::command(). Schedule::command() membuat proses
+anak lewat proc_open, yang dimatikan banyak shared hosting — dan akan gagal
+diam-diam persis di jenis server tempat aplikasi ini dipasang.
+
+
+--------------------------------------------------------------------------------
+ 1. DAFTAR LENGKAP
+--------------------------------------------------------------------------------
+
+  JADWAL         NAMA                          ISI
+  -----------    --------------------------    ---------------------------------
+  tiap menit     scheduler-heartbeat           denyut nadi penjadwal
+  tiap menit     publish-due-content           terbitkan konten terjadwal
+  tiap 5 menit   sync-account-metrics          follower / jumlah post
+  tiap 15 menit  classify-interactions         penilaian AI komentar
+  tiap jam       sync-instagram-insights       insight postingan terbaru
+  tiap jam       cache-remote-images           simpan thumbnail lokal
+  tiap jam       prune-schedules               rapikan antrean terbit
+  tiap jam       resolve-contacts              cocokkan komentator ke kontak
+  tiap 2 jam     backfill-instagram-comments   komentar postingan lama
+  tiap 5 jam     sync-instagram-comments       komentar postingan baru
+  tiap 6 jam     backfill-instagram-insights   insight postingan lama
+  02:00          refresh-account-tokens        perpanjang token Instagram
+  07:30          task-reminders                pengingat deadline tugas
+  Minggu 03:30   prune-old-snapshots           pangkas data lama
+
+Lihat sendiri kapan saja:   php artisan schedule:list
+
+
+--------------------------------------------------------------------------------
+ 2. PENJELASAN SATU PER SATU
+--------------------------------------------------------------------------------
+
+[1] scheduler-heartbeat — TIAP MENIT
+    Menstempel waktu ke SystemHealth.
+
+    Kenapa ada: kalau penjadwal mati, TIDAK ADA yang error. Konten cuma tidak
+    terbit, komentar tidak masuk, dan aplikasi terlihat sehat sambil diam-diam
+    tidak mengerjakan apa pun. Denyut ini yang membuat dashboard bisa bilang
+    "penjadwal mati 40 menit lalu" alih-alih menampilkan halaman normal.
+
+    Kalau tidak jalan: dashboard menandai penjadwal mati setelah 5 menit.
+
+
+[2] publish-due-content — TIAP MENIT   <<< sesuai permintaan
+    Menerbitkan konten yang waktu tayangnya sudah tiba.
+
+    Kenapa tiap menit: ini satu-satunya tugas yang benar-benar terikat waktu.
+    Konten dijadwalkan jam 10:00 harus terbit jam 10:00, bukan 10:59.
+
+    Kalau tidak jalan: konten terlambat terbit. Lewat 24 jam
+    (config publishing.max_delay_hours) ditandai GAGAL oleh prune-schedules
+    supaya tidak tiba-tiba terbit di waktu yang salah, dan harus dijadwalkan
+    ulang manual.
+
+    Anti-tabrakan: tiap jadwal distempel di database sebelum dicoba, bukan
+    pakai withoutOverlapping() — kunci cache-nya bisa nyangkut dan memblokir
+    semua run berikutnya selamanya.
+
+
+[3] sync-account-metrics — TIAP 5 MENIT
+    Follower, following, jumlah postingan. Satu panggilan API per akun.
+
+    Kenapa 5 menit, bukan tiap menit: baris snapshot-nya dikunci ke awal JAM
+    (startOfHour), jadi run tiap menit menulis ulang baris yang sama enam puluh
+    kali per jam — 1.440 panggilan API sehari untuk angka yang cuma berubah
+    per jam. Instagram hanya mengizinkan sekitar 200 panggilan per jam TOTAL,
+    dan insight per-postingan jauh lebih butuh sisa kuota itu.
+
+    Kalau tidak jalan: angka follower di dashboard basi. Tidak ada data hilang.
+
+
+[4] classify-interactions — TIAP 15 MENIT
+    Menilai komentar & DM yang belum dinilai: sentimen, intent, urgensi.
+
+    Kenapa 15 menit: serangan reputasi harus ketahuan selagi masih relevan.
+    Tiap run dibatasi config('crm.ai.per_run_limit') = 200 interaksi, jadi
+    backlog besar dikunyah bertahap (800/jam) tanpa menghabiskan kuota AI.
+
+    Penting: perintah ini SUDAH menyambung sendiri. Tiap run mengambil 200
+    berikutnya yang ai_classified_at-nya masih kosong. Jadi tidak perlu opsi
+    --lanjut; dijalankan berulang = maju. Kalau mau mempercepat manual:
+
+        php artisan interactions:classify --putaran=10
+
+    Penyaringnya 4 lapis, jadi tidak semua komentar menyentuh API: aturan kata
+    kunci -> cache 30 hari -> AI (25 komentar per panggilan) -> penjaga kata.
+
+    Kalau tidak jalan: komentar masuk tapi tidak dinilai. Tab Negatif Urgent
+    dan Perlu Dibalas jadi kosong walau inbox penuh.
+
+
+[5] sync-instagram-insights — TIAP JAM
+    Like, views, reach, saves per postingan. SATU panggilan API per postingan.
+
+    Kenapa hanya tiap jam: ini tugas termahal di sistem. Tiap jam dibatasi
+    jendela INSTAGRAM_MAX_AGE_DAYS (default 90 hari), dan postingan yang
+    angkanya sudah tenang (lebih tua dari 30 hari) hanya disegarkan seminggu
+    sekali. Tanpa dua rem itu satu run bisa menghabiskan kuota sehari.
+
+    Kalau tidak jalan: grafik pertumbuhan berhenti bertambah titik.
+
+
+[6] cache-remote-images — TIAP JAM (maks 200 gambar)
+    Mengunduh thumbnail & avatar yang belum tersimpan lokal.
+
+    Kenapa penting: tautan CDN Instagram membawa tanda kedaluwarsa (oe=) dan
+    mati sekitar dua minggu. Lewat itu gambarnya HILANG PERMANEN — tidak bisa
+    diambil lagi. Ini jaring pengaman untuk yang lolos saat sinkron.
+
+    Kalau tidak jalan: kartu postingan lama kehilangan gambar, tak terpulihkan.
+
+
+[7] prune-schedules — TIAP JAM
+    Membatalkan jadwal yatim (kontennya kembali ke alur kerja) dan menandai
+    gagal jadwal yang terlalu jauh lewat waktu.
+
+    Kalau tidak jalan: kalender penuh jadwal yang tidak akan pernah terbit.
+
+
+[8] resolve-contacts — TIAP JAM (maks 500)
+    Mencocokkan komentator yang belum punya kontak (gagal karena gangguan
+    jaringan, atau username-nya berganti).
+
+    Kalau tidak jalan: sebagian komentar tidak menampilkan siapa pengirimnya.
+
+
+[9] backfill-instagram-comments — TIAP 2 JAM (40 postingan)
+[11] backfill-instagram-insights — TIAP 6 JAM (2 halaman = 100 postingan)
+
+    Dua ini mengisi RIWAYAT. Sinkron biasa (no. 5 dan 10) sengaja hanya melihat
+    postingan baru — benar untuk menjaga inbox tetap segar, dan percuma untuk
+    2.200 postingan yang sudah ada di akun.
+
+    Keduanya MENYAMBUNG dari posisi run sebelumnya:
+      komentar  -> kolom account_media.comments_synced_at
+      insights  -> kolom social_accounts.media_cursor
+
+    Jadi dijalankan berulang = maju, bukan mengulang. Sengaja kecil dan sering,
+    bukan satu sapuan besar tiap malam: sapuan yang gagal di tengah kehilangan
+    semalam penuh, ini tinggal menyambung.
+
+    Perkiraan: seluruh riwayat 2.200 postingan tertutup dalam ~4-6 hari.
+
+    Manual kalau mau lebih cepat:
+        php artisan accounts:sync-insights --lanjut --halaman=5
+        php artisan accounts:sync-comments --lanjut --putaran=5
+
+
+[10] sync-instagram-comments — TIAP 5 JAM
+    Komentar publik pada postingan TERBARU, lewat comment viewer.
+
+    Kenapa bukan API resmi: Instagram Graph API baru mengembalikan ISI komentar
+    setelah aplikasi lolos App Review (Advanced Access) — birokrasi berlebihan
+    untuk memantau postingan sendiri. Viewer ini TIDAK RESMI: bisa berubah,
+    dibatasi, atau hilang kapan saja. Karena itu semua kegagalannya ditelan dan
+    dicatat, tidak pernah mematikan run atau dashboard.
+
+    Kalau tidak jalan: komentar baru tidak masuk inbox.
+
+
+[12] refresh-account-tokens — 02:00 SETIAP HARI
+    Memperpanjang token Instagram yang mendekati kedaluwarsa.
+
+    Kenapa penting: token panjang Instagram berumur 60 HARI. Kalau lewat,
+    SELURUH sinkron berhenti dan harus menghubungkan ulang akun manual.
+
+    Kalau tidak jalan lebih dari ~2 bulan: sambungan putus total.
+
+
+[13] task-reminders — 07:30 SETIAP HARI
+    Mengingatkan deadline tugas.
+
+    Kenapa ada: planner sudah menampilkan "Terlambat: 3" — di halaman yang
+    harus diingat orang untuk dibuka. Tidak ada yang menjangkau keluar, jadi
+    tugas bisa lewat deadline dengan buktinya terpampang dan tak terbaca.
+    07:30 cukup pagi untuk ditindaklanjuti, cukup siang untuk tidak berdering
+    saat subuh. Anti-kirim-ganda pakai stempel tanggal di dalam perintah.
+
+
+[14] prune-old-snapshots — MINGGU 03:30
+    Memangkas snapshot metrik (>400 hari) dan log aktivitas (>365 hari).
+
+    Kenapa ada: tiga tabel ini HANYA bertambah. Di akun dengan 2.200 postingan,
+    snapshot insight saja menambah beberapa ratus baris per hari — tidak apa-apa
+    bulan ini, ratusan ribu baris dalam dua tahun, di komputer desktop tanpa
+    DBA dan tanpa pemantauan.
+
+    Kenapa 400 hari, bukan 90: perbandingan tahun-ke-tahun butuh angka tahun
+    lalu untuk dibandingkan. Dipotong ke 90 hari, semua grafik jangka panjang
+    diam-diam jadi datar.
+
+    TIDAK PERNAH menyentuh: postingan, komentar, tiket, mahasiswa, follow up.
+    Hanya snapshot turunan dan log.
+
+    Periksa dulu kalau ragu:  php artisan data:prune --dry-run
+
+
+--------------------------------------------------------------------------------
+ 3. ANGGARAN PANGGILAN API
+--------------------------------------------------------------------------------
+
+Instagram membatasi sekitar 200 panggilan per jam per pengguna. Perkiraan
+pemakaian sekarang, akun dengan ~2.200 postingan:
+
+    sync-account-metrics       12 / jam   (1 akun x 12 kali)
+    sync-insights (jendela 90h) 30-60 / jam
+    backfill-insights          ~17 / jam  (100 per 6 jam)
+    ---------------------------------------------------
+    TOTAL                      ~60-90 / jam
+
+Sisa kuota ~110/jam adalah cadangan yang disengaja: untuk tombol Sinkron
+manual, dan supaya lonjakan tidak membuat akun kena throttle.
+
+Comment viewer (dolphinradar) TIDAK memakai kuota Instagram — layanan terpisah,
+dan sengaja dibatasi 40 postingan per 2 jam supaya tetap sopan.
+
+Groq (penilaian AI) memakai kuotanya sendiri: 200 interaksi per 15 menit,
+dibatch 25 per panggilan = maksimal 8 panggilan per run.
+
+
+--------------------------------------------------------------------------------
+ 4. KALAU KOMPUTER MATI BEBERAPA HARI
+--------------------------------------------------------------------------------
+
+Penjadwal TIDAK mengejar ketinggalan. Ia menilai "apa yang jatuh tempo menit
+ini", bukan "apa yang terlewat kemarin".
+
+Begitu `composer run dev:lan` dijalankan lagi:
+
+    metrik akun      -> jalan dalam 5 menit
+    insights terbaru -> jalan di jam berikutnya
+    komentar terbaru -> jalan dalam <= 5 jam
+    penilaian AI     -> jalan dalam 15 menit
+    backfill riwayat -> menyambung dari posisi terakhir, tidak mengulang
+
+Tidak ada yang hilang permanen KECUALI satu hal:
+
+    Konten terjadwal yang lewat 24 jam ditandai GAGAL dan harus dijadwalkan
+    ulang manual. Periksa setelah mati lebih dari sehari:
+
+        php artisan schedules:prune --dry-run
+
+Kalau tidak sabar menunggu jadwal:
+
+        php artisan accounts:sync-today
+
+Antrean aman: queue-nya di database (tabel jobs), bukan di memori. Job yang
+belum sempat dikerjakan tetap ada dan langsung diproses saat worker hidup.
+
+
+--------------------------------------------------------------------------------
+ 5. PEMERIKSAAN RUTIN
+--------------------------------------------------------------------------------
+
+Harian (5 detik, lihat dashboard):
+    - kotak Kesehatan Sistem hijau?
+
+Mingguan:
+    php artisan schedule:list           kapan tiap tugas jalan berikutnya
+    php artisan monitoring:diagnose     kenapa postingan tidak muncul
+    php artisan data:prune --dry-run    berapa yang akan dipangkas
+
+Bulanan:
+    php artisan accounts:sync-comments --lanjut   cakupan komentar sudah berapa
+    cek tabel jobs & failed_jobs tidak menumpuk
+
+Kalau ada yang aneh:
+    storage/logs/laravel.log
+
+
+================================================================================

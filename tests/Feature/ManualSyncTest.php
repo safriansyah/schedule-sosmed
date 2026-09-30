@@ -69,11 +69,23 @@ it('runs a manual sync and reports the result', function () {
     expect($state['message'])->toContain('Sinkron selesai');
 });
 
-it('gives every role access to trigger a sync', function () {
+it('gives every role with monitoring access the sync button', function () {
     Queue::fake();
     Http::fake(['*' => Http::response(['data' => []])]);
 
-    foreach (RoleName::cases() as $role) {
+    // Roles that hold the permission, not every role there is. "Operator Follow
+// Up" deliberately does without the read baseline the other roles share — its
+// whole job is following up its own tickets — so iterating RoleName::cases()
+// here would assert that a restricted role is not restricted.
+    $roles = array_filter(
+        RoleName::cases(),
+        fn (RoleName $r) => User::withRole($r)->firstOrFail()
+            ->hasPermission(App\Enums\Permission::ViewMonitoring),
+    );
+
+    expect($roles)->not->toBeEmpty();
+
+    foreach ($roles as $role) {
         // Cleared between roles, otherwise the busy guard would short-circuit
         // every role after the first and this would assert nothing.
         app(SyncStatus::class)->clear();
@@ -82,5 +94,14 @@ it('gives every role access to trigger a sync', function () {
             ->post(route('sync.now'))->assertRedirect();
     }
 
-    Queue::assertPushed(RunQuickSync::class, count(RoleName::cases()));
+    Queue::assertPushed(RunQuickSync::class, count($roles));
+});
+
+it('refuses the sync to a role without monitoring access', function () {
+    Queue::fake();
+
+    $this->actingAs(User::withRole(RoleName::FollowUp)->firstOrFail())
+        ->post(route('sync.now'))->assertForbidden();
+
+    Queue::assertNothingPushed();
 });

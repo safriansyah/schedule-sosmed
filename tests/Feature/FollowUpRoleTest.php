@@ -91,7 +91,7 @@ it('can record a follow up on its own ticket', function () {
     $ticket = ticketFor($user);
 
     $this->actingAs($user)->post(route('tickets.followUp', $ticket), [
-        'action' => 'call',
+        'action' => 'ditelepon',
         'response_text' => 'Sudah dihubungi lewat telepon.',
         'status' => 'on_proses',
     ])->assertRedirect();
@@ -104,15 +104,22 @@ it('cannot close a ticket, even through the follow up form', function () {
     $user = followUpUser();
     $ticket = ticketFor($user);
 
-    // The status route is the honest way to close, and it is gated.
+    // Closing has its own route, and that one is gated on CloseTickets.
     $this->actingAs($user)
-        ->post(route('tickets.status', $ticket), ['status' => TicketStatus::Closed->value])
+        ->post(route('tickets.close', $ticket), ['resolution_note' => 'Sudah selesai semua.'])
         ->assertForbidden();
 
+    // The status route is reachable (it is HandleTickets), but it refuses to
+    // close: closing must record a resolution, so it is pushed to the route
+    // above rather than allowed as a plain status change.
+    $this->actingAs($user)
+        ->post(route('tickets.status', $ticket), ['status' => TicketStatus::Closed->value])
+        ->assertSessionHasErrors('status');
+
     // And the follow-up form's own vocabulary cannot reach a closed state:
-    // anything unrecognised falls back to "on proses", never to closed.
+    // anything outside new/assigned/on_proses falls back to "on proses".
     $this->actingAs($user)->post(route('tickets.followUp', $ticket), [
-        'action' => 'call',
+        'action' => 'ditelepon',
         'status' => TicketStatus::Closed->value,
     ])->assertRedirect();
 

@@ -30,13 +30,17 @@ Schedule::call(function () {
     Artisan::call('content:publish-due');
 })->everyMinute()->name('publish-due-content');
 
-// Account counters (followers / follows / posts) — one cheap API call per
-// account, so it can run every minute to keep the dashboard numbers live.
-// Snapshots are keyed per hour/day, so frequent runs just refresh the current
-// figures rather than piling up rows.
+// Account counters (followers / follows / posts).
+//
+// Every FIVE minutes, not every minute. The snapshot row is keyed to
+// startOfHour(), so a per-minute run rewrote the same row sixty times an hour
+// and spent 1.440 API calls a day to do it. Instagram allows roughly 200 calls
+// an hour in total, and the per-post insights below need that headroom far
+// more than a follower count does. Five minutes keeps the dashboard live to
+// the minute people actually notice, at a twelfth of the cost.
 Schedule::call(function () {
     Artisan::call('accounts:sync-metrics');
-})->everyMinute()->name('sync-account-metrics');
+})->everyFiveMinutes()->name('sync-account-metrics');
 
 // Per-post insights (likes / views / reach / saves) — ONE API call per post,
 // so this stays hourly to respect Instagram's rate limit (~200 calls/hour).
@@ -124,6 +128,17 @@ Schedule::call(function () {
 Schedule::call(function () {
     Artisan::call('tasks:remind');
 })->dailyAt('07:30')->name('task-reminders');
+
+// Retention. media_metrics, account_metrics and activities only ever gain
+// rows — a few hundred a day on a real account — and nothing was ever removing
+// them. Weekly and at a dead hour, because it deletes in chunks and there is
+// no reason for it to compete with anyone.
+//
+// Only derived snapshots and the audit log are touched. Posts, comments,
+// tickets, students and follow-ups are never pruned.
+Schedule::call(function () {
+    Artisan::call('data:prune', ['--force' => true]);
+})->weeklyOn(0, '03:30')->name('prune-old-snapshots');
 
 /*
 | ─────────────────────────────────────────────────────────────────────────────
