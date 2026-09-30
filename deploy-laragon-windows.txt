@@ -745,3 +745,109 @@ php artisan accounts:sync-comments     # 3. KOMENTAR — butuh langkah 2
 php artisan interactions:classify      # 4. penilaian AI
 php artisan contacts:resolve           # 5. cocokkan komentator ke kontak
 php artisan media:cache                # 6. simpan thumbnail lokal
+
+--------------------------------------------------------------------------------
+DUA MODE SINKRON — PENTING
+--------------------------------------------------------------------------------
+
+Perintah di atas berjalan dalam mode SEGARKAN: selalu mulai dari postingan
+TERBARU. Itu benar untuk pemakaian harian, karena komentar baru muncul di
+postingan baru. Tapi mode ini tidak akan pernah sampai ke postingan lama —
+dijalankan seratus kali pun, yang disentuh postingan yang itu-itu juga.
+
+Untuk menarik seluruh riwayat akun, pakai mode LANJUT. Tiap run menyambung dari
+posisi run sebelumnya, jadi dijalankan berulang = maju, bukan mengulang:
+
+  php artisan accounts:sync-insights --lanjut              # 1 halaman = 50 postingan
+  php artisan accounts:sync-insights --lanjut --halaman=5  # 250 postingan sekali jalan
+
+  php artisan accounts:sync-comments --lanjut              # 40 postingan berikutnya
+  php artisan accounts:sync-comments --lanjut --putaran=5  # 5 x 40 = 200, ada jeda
+
+Keduanya mencetak kemajuan, misalnya "Cakupan sekarang: 240 / 2.227". Kalau
+sudah habis, perintahnya bilang sendiri dan berhenti.
+
+Jendela usia (INSTAGRAM_MAX_AGE_DAYS, default 90 hari) hanya berlaku di mode
+segarkan. Mode --lanjut sengaja mengabaikannya — justru menembus ke belakang
+itulah tujuannya.
+
+Backfill ini juga sudah dijadwalkan otomatis (lihat routes/console.php):
+insights 2 halaman tiap 6 jam, komentar 40 postingan tiap 2 jam. Jadi kalau
+scheduler jalan, riwayat akan terisi sendiri dalam beberapa hari tanpa
+diketik manual.
+
+--------------------------------------------------------------------------------
+KALAU KOMPUTER MATI, LALU DINYALAKAN LAGI
+--------------------------------------------------------------------------------
+
+Jawaban singkat: cukup `composer run dev:lan`. Tidak ada command sinkron yang
+wajib diketik manual.
+
+Yang perlu diketahui:
+
+1. Penjadwal TIDAK mengejar ketinggalan.
+   `schedule:work` menilai "apa yang jatuh tempo menit ini", bukan "apa yang
+   terlewat kemarin". Jadi kalau komputer mati 2 hari, dua hari itu memang
+   tidak dikerjakan. Tapi tidak ada yang hilang permanen -- begitu hidup lagi:
+
+     - metrik akun     : jalan dalam 1 menit
+     - insights terbaru: jalan di jam berikutnya
+     - komentar terbaru: jalan dalam <= 5 jam
+     - backfill riwayat: menyambung dari posisi terakhir, bukan mengulang
+
+   Kalau tidak sabar menunggu, satu perintah ini menyegarkan yang penting:
+
+     php artisan accounts:sync-today
+
+2. YANG PERLU DIPERIKSA: konten terjadwal yang lewat waktu.
+   Ini satu-satunya hal yang bisa benar-benar rugi. Konten yang seharusnya
+   terbit selagi komputer mati akan terlambat. Batas amannya 24 jam
+   (config publishing.max_delay_hours). Lewat dari itu, `schedules:prune`
+   menandainya GAGAL supaya tidak tiba-tiba terbit di waktu yang salah, dan
+   harus dijadwalkan ulang manual.
+
+   Setelah mati lebih dari sehari, periksa:
+
+     php artisan schedules:prune --dry-run
+
+   Tidak mengubah apa pun, hanya menampilkan mana yang kedaluwarsa.
+
+3. Dashboard sudah memberi tahu kalau penjadwal mati.
+   Ada heartbeat tiap menit; lewat 5 menit tanpa denyut, dashboard menyebutnya.
+   Jadi tidak perlu menebak apakah `schedule:work` masih hidup.
+
+4. Ketiga proses mati bersamaan.
+   `composer run dev:lan` memakai --kill-others: kalau satu proses mati, dua
+   lainnya ikut mati. Ini disengaja (supaya tidak ada keadaan setengah jalan
+   yang menyesatkan), tapi artinya jendela itu tidak boleh ditutup. Untuk
+   komputer yang menyala 24 jam dan tidak ada yang login, pakai Task Scheduler
+   -- lihat bagian 6.
+
+5. Antrean tidak hilang saat mati.
+   Queue-nya di database (tabel `jobs`), bukan di memori. Job yang belum sempat
+   dikerjakan tetap ada dan langsung diproses begitu worker hidup lagi.
+
+--------------------------------------------------------------------------------
+SINKRON CEPAT (sama dengan tombol di /monitoring)
+--------------------------------------------------------------------------------
+
+  php artisan accounts:sync-today
+
+Ringan dan sengaja dibatasi: 2 halaman terbaru + komentar 10 postingan terbaru.
+Ini persis yang dikerjakan tombol "Sinkron" di halaman Monitoring, lewat kelas
+yang sama (App\Services\Publishing\QuickSync), supaya keduanya tidak menyimpang.
+
+Tombolnya sendiri TIDAK lagi menunggu di depan layar: sekali klik, pekerjaannya
+masuk antrean dan halaman memantau statusnya. Ini butuh worker antrean hidup --
+sudah termasuk di `composer run dev:lan`. Kalau worker tidak jalan, tombolnya
+tidak berputar selamanya; setelah ~45 detik ia menyebutkan sendiri bahwa
+antreannya tidak jalan dan menyarankan `php artisan queue:work`.
+
+--------------------------------------------------------------------------------
+KALAU POSTINGAN TIDAK MUNCUL DI /monitoring
+--------------------------------------------------------------------------------
+
+  php artisan monitoring:diagnose
+
+Read-only. Memeriksa akun nonaktif, postingan yang nyangkut di akun lama, dan
+thumbnail yang belum tersimpan, lalu menyebutkan perbaikannya.

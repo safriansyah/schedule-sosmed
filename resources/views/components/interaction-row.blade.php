@@ -137,7 +137,19 @@
     </a>
 
     {{-- "Add to Ticket". Outside the anchor above, because a form nested in a
-         link never submits — the link swallows the click. --}}
+         link never submits — the link swallows the click.
+
+         And NOT a <form> of its own either. This row is rendered inside the
+         inbox's bulk form, and HTML forbids nested forms: the parser drops the
+         inner start tag, so the button silently became part of the bulk form
+         and posted to interactions/bulk with no action — which answered a
+         click on "Add Ticket" with "Pilih tindakan yang ingin dijalankan."
+
+         formaction/formmethod retarget the surrounding form for this one
+         button instead, which is what that attribute pair is for. The bulk
+         form already carries the CSRF token, and fromInteraction() reads the
+         interaction from the route, so the ids[] that travel along are simply
+         ignored. --}}
     @if ($actions)
         <div class="flex shrink-0 flex-col items-end gap-1.5">
             @if ($ticket)
@@ -146,12 +158,11 @@
                     <span class="font-mono">{{ $ticket->number }}</span>
                 </a>
             @elseif (auth()->user()?->hasPermission(\App\Enums\Permission::CreateTickets))
-                <form method="POST" action="{{ route('tickets.fromInteraction', $interaction) }}">
-                    @csrf
-                    <button class="btn-outline btn-sm" title="Jadikan tiket">
-                        <x-icon name="plus" class="h-3.5 w-3.5"/> Add Ticket
-                    </button>
-                </form>
+                <button type="submit" class="btn-outline btn-sm" title="Jadikan tiket"
+                        formmethod="POST"
+                        formaction="{{ route('tickets.fromInteraction', $interaction) }}">
+                    <x-icon name="plus" class="h-3.5 w-3.5"/> Add Ticket
+                </button>
             @endif
         </div>
     @endif

@@ -1,6 +1,6 @@
 <?php
 use App\Enums\RoleName;
-use App\Models\{AccountMedia, User};
+use App\Models\{AccountMedia, SocialAccount, User};
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 
 uses(DatabaseTransactions::class);
@@ -8,10 +8,16 @@ uses(DatabaseTransactions::class);
 it('shows the monitoring page with real synced posts', function () {
     $admin = User::withRole(RoleName::SuperAdmin)->firstOrFail();
 
+    // Whichever account is actually connected, not a name from whenever this
+    // test was written: the institution swaps the account when it swaps the
+    // token, and a hardcoded name then fails for a reason that has nothing to
+    // do with the page under test.
+    $account = SocialAccount::active()->orderBy('name')->firstOrFail();
+
     $this->actingAs($admin)->get(route('monitoring.index'))
         ->assertOk()
         ->assertSee('Monitoring')
-        ->assertSee('Bangka Crew Reborn')
+        ->assertSee(e($account->name), false)
         ->assertSee('Postingan');
 });
 

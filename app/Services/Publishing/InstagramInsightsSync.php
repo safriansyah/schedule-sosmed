@@ -58,11 +58,14 @@ class InstagramInsightsSync
     private const COMMENT_LIMIT = 25;
 
     /**
-     * @return array{media: int, snapshots: int, failed: int}
+     * @param  int|null  $maxPages  Page ceiling for this run; null uses MAX_PAGES.
+     * @param  bool  $backfill  Resume deeper into history instead of starting
+     *                          again at the newest post.
+     * @return array{media: int, snapshots: int, failed: int, done: bool}
      */
-    public function syncAll(): array
+    public function syncAll(?int $maxPages = null, bool $backfill = false): array
     {
-        $totals = ['media' => 0, 'snapshots' => 0, 'failed' => 0];
+        $totals = ['media' => 0, 'snapshots' => 0, 'failed' => 0, 'done' => true];
 
         foreach (SocialAccount::active()->get() as $account) {
             if ($account->platform !== SocialPlatform::Instagram) {
@@ -70,7 +73,11 @@ class InstagramInsightsSync
             }
 
             try {
-                $result = $this->sync($account);
+                $result = $this->sync($account, $maxPages, $backfill);
+
+                // "done" only when every account has reached the end of its
+                // history, so one unfinished account keeps the report honest.
+                $totals['done'] = $totals['done'] && $result['done'];
                 $totals['media'] += $result['media'];
                 $totals['snapshots'] += $result['snapshots'];
             } catch (Throwable $e) {
@@ -83,9 +90,21 @@ class InstagramInsightsSync
     }
 
     /**
-     * @return array{media: int, snapshots: int}
+     * Two modes.
+     *
+     * REFRESH (default) walks from the newest post, stopping at the age window.
+     * This is the routine run: cheap, and it keeps recent numbers current.
+     *
+     * BACKFILL resumes from the account's stored cursor and ignores the window,
+     * so each run reaches further back than the last. Instagram's media list is
+     * paged, and the per-run page ceiling meant the walk could never get past
+     * the first MAX_PAGES x PAGE_SIZE posts however often it ran - an account
+     * with 2.227 posts was permanently capped at 2.000. Remembering the cursor
+     * is what turns "run it again" into progress rather than repetition.
+     *
+     * @return array{media: int, snapshots: int, done: bool}
      */
-    public function sync(SocialAccount $account): array
+    public function sync(SocialAccount $account, ?int $maxPages = null, bool $backfill = false): array
     {
         if (blank($account->access_token)) {
             throw new RuntimeException('Access token belum diisi.');
@@ -96,7 +115,14 @@ class InstagramInsightsSync
         $seen = 0;
         $snapshots = 0;
 
-        foreach ($this->walkMedia($client) as $post) {
+        $walk = $this->walkMedia(
+            $client,
+            cutoff: $backfill ? null : $this->cutoff(),
+            startUrl: $backfill ? $account->media_cursor : null,
+            maxPages: $maxPages ?? self::MAX_PAGES,
+        );
+
+        foreach ($walk as $post) {
             $seen++;
             $media = $this->storeMedia($account, $post);
 
@@ -113,7 +139,33 @@ class InstagramInsightsSync
             $this->storeComments($client, $media);
         }
 
-        return ['media' => $seen, 'snapshots' => $snapshots];
+        // Where the walk stopped. null means it ran out of pages - the end of
+        // the account's history. Only meaningful once the generator has
+        // finished, which the foreach above guarantees.
+        $next = $walk->getReturn();
+
+        if ($backfill) {
+            $account->forceFill([
+                'media_cursor' => $next,
+                // Stamped only on reaching the end, so a later run can tell
+                // "finished" from "not started" - a null cursor means both.
+                'media_backfilled_at' => $next === null ? now() : $account->media_backfilled_at,
+            ])->saveQuietly();
+        }
+
+        return ['media' => $seen, 'snapshots' => $snapshots, 'done' => $next === null];
+    }
+
+    /**
+     * The oldest post worth syncing, or null when every post is wanted.
+     *
+     * Set with INSTAGRAM_MAX_AGE_DAYS; 0 removes the limit.
+     */
+    private function cutoff(): ?Carbon
+    {
+        $days = (int) config('services.instagram.max_age_days', 90);
+
+        return $days > 0 ? now()->subDays($days)->startOfDay() : null;
     }
 
     /**
@@ -122,15 +174,24 @@ class InstagramInsightsSync
      *
      * @return Generator<int, array<string, mixed>>
      */
-    private function walkMedia(PendingRequest $client): Generator
-    {
-        $url = '/me/media';
+    private function walkMedia(
+        PendingRequest $client,
+        ?Carbon $cutoff = null,
+        ?string $startUrl = null,
+        ?int $maxPages = null,
+    ): Generator {
+        // A stored cursor is an absolute URL that already carries fields and
+        // limit, so the query parameters are only sent on a fresh walk.
+        $fresh = $startUrl === null;
+        $url = $startUrl ?? '/me/media';
+        $maxPages = max(1, $maxPages ?? self::MAX_PAGES);
+
         $params = [
             'fields' => 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count',
             'limit' => self::PAGE_SIZE,
         ];
 
-        for ($page = 0; $page < self::MAX_PAGES && $url !== null; $page++) {
+        for ($page = 0; $page < $maxPages && $url !== null; $page++) {
             // Every page carries the token, including the ones reached through
             // `paging.next`.
             //
@@ -146,7 +207,7 @@ class InstagramInsightsSync
             //
             // An absolute URL bypasses the client's baseUrl, so passing it to
             // the same $client keeps the header and the full link.
-            $response = $page === 0
+            $response = $page === 0 && $fresh
                 ? $client->get($url, $params)
                 : $client->get($url);
 
@@ -155,11 +216,27 @@ class InstagramInsightsSync
             }
 
             foreach ($response->json('data', []) as $post) {
+                // Instagram returns the media list newest-first, so the first
+                // post outside the window means every remaining post is too —
+                // there is nothing to gain from asking for the next page.
+                //
+                // A post with no timestamp is never used to stop the walk: it
+                // would end the run early on a data quirk rather than on age.
+                if ($cutoff !== null
+                    && isset($post['timestamp'])
+                    && Carbon::parse($post['timestamp'])->lt($cutoff)) {
+                    return;
+                }
+
                 yield $post;
             }
 
             $url = $response->json('paging.next');
         }
+
+        // Handed back through Generator::getReturn(): where to resume, or null
+        // when the account has no further pages.
+        return $url;
     }
 
     /**

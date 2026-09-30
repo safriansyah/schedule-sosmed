@@ -50,10 +50,37 @@ Schedule::call(function () {
     Artisan::call('accounts:refresh-tokens');
 })->dailyAt('02:00')->name('refresh-account-tokens');
 
-// Public comments (via the unofficial viewer) refreshed every 5 hours.
+// Public comments (via the unofficial viewer) refreshed every 5 hours. This
+// pass deliberately revisits the NEWEST posts, because that is where new
+// comments appear.
 Schedule::call(function () {
     Artisan::call('accounts:sync-comments');
 })->cron('0 */5 * * *')->name('sync-instagram-comments');
+
+/*
+| ── Backfill ────────────────────────────────────────────────────────────────
+| The two passes above only ever look at recent posts, which is right for
+| keeping the inbox current and useless for the 2.200 posts already on the
+| account. These fill in the history instead: each run continues from where
+| the last stopped, so the archive is covered over a few days without any run
+| being big enough to exhaust the API quota or hammer the comment viewer.
+|
+| Deliberately small and frequent rather than one nightly sweep — a sweep that
+| fails halfway loses its whole night, whereas these just resume.
+*/
+
+// ~100 posts every 6 hours: the full 2.200 in about six days.
+// One page is 50 posts and costs ~50 insight calls, so 2 pages sits well
+// inside Instagram's ~200 calls/hour.
+Schedule::call(function () {
+    Artisan::call('accounts:sync-insights', ['--lanjut' => true, '--halaman' => 2]);
+})->cron('20 */6 * * *')->name('backfill-instagram-insights');
+
+// 40 posts every 2 hours through the unofficial viewer. Offset from the
+// refresh pass above so the two are never in flight at the same time.
+Schedule::call(function () {
+    Artisan::call('accounts:sync-comments', ['--lanjut' => true]);
+})->cron('40 */2 * * *')->name('backfill-instagram-comments');
 
 // Grab local copies of any avatar or thumbnail we do not have yet. The syncs
 // already cache what they fetch; this catches whatever slipped through while

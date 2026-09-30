@@ -44,6 +44,10 @@ class DatabaseSeeder extends Seeder
             ['Operator Satu', 'operator1@example.com'],
             ['Operator Dua', 'operator2@example.com'],
         ],
+        RoleName::FollowUp->value => [
+            ['Follow Up Satu', 'followup1@example.com'],
+            ['Follow Up Dua', 'followup2@example.com'],
+        ],
     ];
 
     public function run(): void

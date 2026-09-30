@@ -163,6 +163,9 @@ it('swallows a failed viewer response without throwing', function () {
         'permalink' => 'https://www.instagram.com/p/Fff/', 'posted_at' => now(),
     ]);
 
-    expect(commentSync()->syncMedia($media))->toBe(0);
+    // null, not 0: the viewer was unreachable, which is different from the post
+    // having no comments. The backfill relies on the difference to know it must
+    // come back to this post rather than marking it covered.
+    expect(commentSync()->syncMedia($media))->toBeNull();
     expect($media->interactions()->count())->toBe(0);
 });

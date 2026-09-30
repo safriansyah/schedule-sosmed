@@ -17,6 +17,7 @@ class SocialAccount extends Model
         'access_token', 'refresh_token', 'token_expires_at',
         'avatar_url', 'followers_count', 'media_count',
         'is_active', 'meta',
+        'media_cursor', 'media_backfilled_at',
     ];
 
     protected $hidden = ['access_token', 'refresh_token'];
@@ -32,6 +33,7 @@ class SocialAccount extends Model
             'meta' => 'array',
             'followers_count' => 'integer',
             'media_count' => 'integer',
+            'media_backfilled_at' => 'datetime',
         ];
     }
 

@@ -19,11 +19,12 @@ class AccountMedia extends Model
     protected $fillable = [
         'social_account_id', 'content_id', 'external_id', 'caption',
         'media_type', 'product_type', 'permalink', 'thumbnail_url', 'thumbnail_path', 'posted_at',
+        'comments_synced_at',
     ];
 
     protected function casts(): array
     {
-        return ['posted_at' => 'datetime'];
+        return ['posted_at' => 'datetime', 'comments_synced_at' => 'datetime'];
     }
 
     public function account(): BelongsTo

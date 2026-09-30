@@ -85,6 +85,8 @@ Route::middleware('auth')->group(function () {
 
     // Manual data sync — throttled to protect the API quota
     Route::post('sync', [SyncController::class, 'store'])->middleware('throttle:6,1')->name('sync.now');
+    // Polled by the button while a run is in flight. Cheap: one cache read.
+    Route::get('sync/status', [SyncController::class, 'show'])->name('sync.status');
 
     // Live performance of connected accounts and their posts
     Route::get('monitoring', [MonitoringController::class, 'index'])->name('monitoring.index');

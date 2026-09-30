@@ -14,6 +14,7 @@ enum RoleName: string
     case Manager = 'manager';
     case Pic = 'pic';
     case Operator = 'operator';
+    case FollowUp = 'follow_up';
 
     /**
      * The name plus what the role is FOR, in brackets.
@@ -34,6 +35,7 @@ enum RoleName: string
             self::Manager => 'Manager (Penanganan & Pembagian)',
             self::Pic => 'PIC (Penanganan)',
             self::Operator => 'Operator (Penanganan & Data)',
+            self::FollowUp => 'Operator Follow Up (Tiket)',
         };
     }
 
@@ -50,7 +52,7 @@ enum RoleName: string
     {
         return match ($this) {
             self::Creative, self::Curator, self::Verifier => 'Konten',
-            self::Manager, self::Pic, self::Operator => 'Penanganan',
+            self::Manager, self::Pic, self::Operator, self::FollowUp => 'Penanganan',
             default => 'Umum',
         };
     }
@@ -66,6 +68,8 @@ enum RoleName: string
             self::Manager => 'Membagi tugas, memantau SLA, dan mengeskalasi interaksi mendesak.',
             self::Pic => 'Menangani dan membalas interaksi pada kanal yang menjadi tanggung jawabnya.',
             self::Operator => 'Menangani interaksi, melengkapi data kontak, dan mengangkat agent baru.',
+            self::FollowUp => 'Hanya menindaklanjuti tiket yang ditugaskan kepadanya. '
+                .'Tidak bisa membuat, membagikan, menutup, atau melihat tiket orang lain.',
         };
     }
 
@@ -80,6 +84,7 @@ enum RoleName: string
             self::Manager => 'users',
             self::Pic => 'headset',
             self::Operator => 'user-plus',
+            self::FollowUp => 'phone',
         };
     }
 
@@ -203,6 +208,36 @@ enum RoleName: string
                 // restriction that is deliberate is reassignment, not closure.
                 Permission::CloseTickets,
                 Permission::ViewTasks,
+            ],
+
+            /*
+             | The narrowest role in the system: follow up the tickets handed to
+             | them, and nothing else.
+             |
+             | It deliberately does NOT get the $read baseline above. Every other
+             | role does, which quietly grants content, calendar, analytics and
+             | monitoring — reasonable for a team member, wrong for someone whose
+             | whole job is phoning the students on their own list. Leaving the
+             | baseline out is the point of this role, not an oversight.
+             |
+             | What each omission buys:
+             |   no ViewAllTickets  -> the list and guardVisibility() narrow to
+             |                         tickets assigned to (or raised by) them
+             |   no CreateTickets   -> they work the queue, they do not open it
+             |   no AssignTickets   -> they cannot hand work to anyone else
+             |   no CloseTickets    -> closing demands a resolution and stays
+             |                         with PIC/Operator/Manager
+             |
+             | HandleTickets on its own cannot close a ticket: a follow-up may
+             | only set the short vocabulary (new / assigned / on_proses), all of
+             | which map to OPEN ticket states, and addFollowUp() refuses a
+             | ticket that is already closed. So "follow up but never finish" is
+             | enforced by the flow, not just by hiding a button.
+             */
+            self::FollowUp => [
+                Permission::ViewDashboard,
+                Permission::ViewTickets,
+                Permission::HandleTickets,
             ],
 
             // Operator is the only non-admin role that may enrich a contact

@@ -3,54 +3,64 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Permission;
+use App\Jobs\RunQuickSync;
 use App\Models\AccountMetric;
-use App\Services\Publishing\AccountMetricsSync;
-use App\Services\Publishing\InstagramCommentSync;
-use App\Services\Publishing\InstagramInsightsSync;
+use App\Services\Publishing\SyncStatus;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Throwable;
+use Illuminate\Http\Request;
 
 /**
  * On-demand sync — the button that fetches fresh numbers right now instead of
- * waiting for the nightly schedule. Rate-limited at the route to protect the
- * Instagram API quota.
+ * waiting for the schedule.
+ *
+ * The work is queued, not done here. It used to run inline, which meant the
+ * request held open for as long as the Instagram API took: one call per post
+ * refreshed, so tens of seconds on a real account. The page looked frozen and
+ * people pressed the button again, starting a second sweep on top of the first.
  */
 class SyncController extends Controller
 {
-    public function __construct(
-        private readonly AccountMetricsSync $metrics,
-        private readonly InstagramInsightsSync $insights,
-        private readonly InstagramCommentSync $comments,
-    ) {}
+    public function __construct(private readonly SyncStatus $status) {}
 
-    public function store(): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $this->authorize(Permission::ViewMonitoring->value);
 
-        try {
-            $accounts = $this->metrics->syncAll();
-            $posts = $this->insights->syncAll();
-            // Bounded so the synchronous request stays responsive; the full
-            // sweep runs on the 5-hourly schedule.
-            $comments = $this->comments->syncAll(maxPostsOverride: 10);
-        } catch (Throwable $e) {
-            return back()->with('toast', [
-                'message' => 'Sinkron gagal: '.$e->getMessage(),
-                'type' => 'error',
-            ]);
+        if ($this->status->isBusy()) {
+            return $this->answer($request, 'Sinkron sedang berjalan — tunggu sampai selesai.');
         }
 
-        $message = sprintf(
-            'Sinkron selesai — %d akun, %d postingan, %d snapshot baru, %d komentar.',
-            $accounts['synced'],
-            $posts['media'],
-            $posts['snapshots'],
-            $comments['comments'],
-        );
+        // Marked queued BEFORE dispatch, so a second click in the same second
+        // cannot slip through the check above.
+        $this->status->queued();
 
-        return back()->with('toast', [
-            'message' => $message,
-            'type' => $accounts['failed'] + $posts['failed'] > 0 ? 'warning' : 'success',
+        RunQuickSync::dispatch();
+
+        return $this->answer($request, 'Sinkron dijalankan di latar belakang — hasilnya muncul sebentar lagi.');
+    }
+
+    /**
+     * The button posts with fetch and polls for the outcome, so it wants JSON.
+     * The plain form POST is kept working as well: the button is a shared
+     * component and JavaScript is not guaranteed to have loaded.
+     */
+    private function answer(Request $request, string $message): RedirectResponse|JsonResponse
+    {
+        if ($request->expectsJson()) {
+            return response()->json($this->status->current() + ['message' => $message]);
+        }
+
+        return back()->with('toast', ['message' => $message, 'type' => 'info']);
+    }
+
+    /** Polled by the button while a run is in flight. */
+    public function show(): JsonResponse
+    {
+        $this->authorize(Permission::ViewMonitoring->value);
+
+        return response()->json($this->status->current() + [
+            'last_synced_at' => self::lastSyncedAt()?->diffForHumans(),
         ]);
     }
 
