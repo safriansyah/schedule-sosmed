@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\SocialPlatform;
+use App\Models\AccountMedia;
 use App\Models\SocialAccount;
 use App\Services\Publishing\InstagramInsightsSync;
 use App\Support\SchemaGuard;
@@ -22,7 +23,8 @@ class SyncInstagramInsights extends Command
 {
     protected $signature = 'accounts:sync-insights
                             {--lanjut : Lanjutkan dari posisi terakhir, menembus batas 2.000 postingan}
-                            {--halaman= : Jumlah halaman per run (1 halaman = 50 postingan)}';
+                            {--halaman= : Jumlah halaman per run (1 halaman = 50 postingan)}
+                            {--status : Tampilkan posisi saja, tanpa menyentuh jaringan}';
 
     protected $description = 'Tarik postingan Instagram beserta insight-nya dan simpan snapshot harian.';
 
@@ -30,6 +32,17 @@ class SyncInstagramInsights extends Command
     {
         $backfill = (bool) $this->option('lanjut');
         $pages = $this->option('halaman') !== null ? max(1, (int) $this->option('halaman')) : null;
+
+        if ($this->option('status')) {
+            $this->newLine();
+            $this->line('  <options=bold>POSISI SCRAPING POSTINGAN</>');
+            $this->line(sprintf('    tersimpan : %s postingan', number_format(AccountMedia::count())));
+            $this->newLine();
+            $this->reportCursors();
+            $this->newLine();
+
+            return self::SUCCESS;
+        }
 
         $this->newLine();
 

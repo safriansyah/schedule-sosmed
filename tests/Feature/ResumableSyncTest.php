@@ -18,6 +18,7 @@ use App\Enums\SocialPlatform;
 use App\Models\{AccountMedia, SocialAccount};
 use App\Services\Publishing\{InstagramCommentSync, InstagramInsightsSync};
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 uses(DatabaseTransactions::class);
@@ -203,4 +204,64 @@ it('does not touch the cursor on an ordinary refresh run', function () {
 
     // A refresh that overwrote the cursor would silently restart the backfill.
     expect($account->fresh()->media_cursor)->toBe('https://graph.instagram.com/v21.0/me/media?after=SIMPAN-INI');
+});
+
+it('does not move the marker when the network is down', function () {
+    // The exact situation: a backfill started, the internet died mid-run.
+    // Nothing must be recorded as covered, or those posts are skipped forever
+    // once the connection comes back.
+    $account = resumeAccount();
+
+    foreach (range(1, 3) as $i) {
+        resumePost($account, 300 + $i, 'putus'.$i);
+    }
+
+    $sync = app(InstagramCommentSync::class);
+    $before = $sync->progress();
+
+    // Not an exception from the client — the service catches those inside
+    // fetch() and returns null, which is the path a real outage takes.
+    Http::fake(fn () => throw new ConnectionException('Koneksi terputus'));
+
+    $result = $sync->syncAll(3, backfill: true);
+
+    expect($result['posts'])->toBe(0);
+    expect($result['failed'])->toBe(3);
+
+    // The marker has not moved: the same three posts are still waiting.
+    expect($sync->progress())->toBe($before);
+});
+
+it('picks up exactly where it left off once the network returns', function () {
+    $account = resumeAccount();
+
+    foreach (range(1, 3) as $i) {
+        resumePost($account, 300 + $i, 'pulih'.$i);
+    }
+
+    $sync = app(InstagramCommentSync::class);
+
+    // One stub that can be brought back, rather than two Http::fake() calls:
+    // a second fake is ADDED to the stub list, not swapped in, so the throwing
+    // one would keep matching and the recovery would never be exercised.
+    $mati = true;
+
+    Http::fake(function () use (&$mati) {
+        if ($mati) {
+            throw new ConnectionException('koneksi terputus');
+        }
+
+        return Http::response(['code' => 0, 'data' => ['comment_count' => 0, 'comments' => []]]);
+    });
+
+    $sync->syncAll(3, backfill: true);
+
+    expect($sync->progress()['remaining'])->toBe(3);
+
+    // Connection back. No flag to reset, no repair command, no manual bookkeeping
+    // — the next ordinary run simply finds them still unmarked and takes them.
+    $mati = false;
+
+    expect($sync->syncAll(3, backfill: true)['posts'])->toBe(3);
+    expect($sync->progress()['remaining'])->toBe(0);
 });

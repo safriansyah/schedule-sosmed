@@ -780,7 +780,27 @@ diketik manual.
 MEMINDAHKAN PERUBAHAN KE KOMPUTER SERVER
 --------------------------------------------------------------------------------
 
-CARA YANG BENAR: pakai git.
+CARA YANG DIPAKAI: zip - pindah - ekstrak, lewat dua skrip.
+
+    (di komputer ini, tempat mengoding)
+    .\kirim-update.ps1
+
+        Menghasilkan satu ZIP berisi SEMUANYA kecuali .env, storage\, vendor\,
+        node_modules\ dan .git\ -- lima hal yang memang milik komputer tujuan.
+        publicuild ikut, jadi komputer server tidak perlu npm sama sekali.
+        Skrip ini menolak membuat ZIP kalau database\migrations tidak ikut.
+
+    (di komputer server, setelah ZIP diekstrak MENIMPA folder aplikasi)
+    .\pasang-update.ps1
+
+        Menjalankan migrate, seeder role, dan membersihkan cache dengan urutan
+        yang benar, lalu berhenti kalau ada langkah yang gagal -- bukan
+        melanjutkan dengan pemasangan setengah jadi.
+
+    Tutup dulu jendela `composer run dev:lan` sebelum mengekstrak.
+
+
+ALTERNATIF: pakai git.
 
     (di komputer server)
     git pull

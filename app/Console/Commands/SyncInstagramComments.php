@@ -24,7 +24,8 @@ class SyncInstagramComments extends Command
                             {--lanjut : Lanjutkan ke postingan berikutnya yang belum pernah diambil komentarnya}
                             {--posts= : Jumlah postingan per putaran (default dari DOLPHINRADAR_MAX_POSTS)}
                             {--putaran=1 : Berapa kali batch dijalankan dalam sekali perintah}
-                            {--jeda=3 : Jeda detik antar putaran, supaya tidak dianggap membanjiri}';
+                            {--jeda=3 : Jeda detik antar putaran, supaya tidak dianggap membanjiri}
+                            {--status : Tampilkan posisi saja, tanpa menyentuh jaringan}';
 
     protected $description = 'Tarik komentar publik dari postingan (via comment viewer) dan simpan.';
 
@@ -48,6 +49,25 @@ class SyncInstagramComments extends Command
         }
 
         $before = $sync->progress();
+
+        // Answers "sudah sampai mana?" without making a single request. Asked
+        // after every interruption, and the honest way to answer it used to be
+        // to start a run and read the first line — which then went on to fetch
+        // forty posts nobody asked for.
+        if ($this->option('status')) {
+            $this->newLine();
+            $this->line('  <options=bold>POSISI SCRAPING KOMENTAR</>');
+            $this->line(sprintf('    sudah diambil : %s postingan', number_format($before['done'])));
+            $this->line(sprintf('    belum         : %s postingan', number_format($before['remaining'])));
+            $this->line(sprintf('    total         : %s postingan', number_format($before['total'])));
+            $this->newLine();
+            $this->line($before['remaining'] > 0
+                ? '    Lanjutkan: <options=bold>php artisan accounts:sync-comments --lanjut</>'
+                : '    Semua postingan sudah pernah diambil komentarnya.');
+            $this->newLine();
+
+            return self::SUCCESS;
+        }
 
         $this->newLine();
         $this->line($backfill
