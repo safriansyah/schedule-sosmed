@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Publishing\InstagramCommentSync;
+use App\Support\SchemaGuard;
 use Illuminate\Console\Command;
 
 /**
@@ -33,6 +34,18 @@ class SyncInstagramComments extends Command
         $perRound = $this->option('posts') !== null ? max(1, (int) $this->option('posts')) : null;
         $rounds = max(1, (int) $this->option('putaran'));
         $pause = max(0, (int) $this->option('jeda'));
+
+        // Checked for BOTH modes: progress() reads comments_synced_at, so a
+        // missing column breaks the very first line this command prints.
+        $missing = SchemaGuard::missing(['account_media.comments_synced_at']);
+
+        if ($missing !== []) {
+            $this->newLine();
+            $this->error(SchemaGuard::explain($missing));
+            $this->newLine();
+
+            return self::FAILURE;
+        }
 
         $before = $sync->progress();
 

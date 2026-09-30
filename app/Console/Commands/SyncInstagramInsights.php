@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\SocialPlatform;
 use App\Models\SocialAccount;
 use App\Services\Publishing\InstagramInsightsSync;
+use App\Support\SchemaGuard;
 use Illuminate\Console\Command;
 
 /**
@@ -33,6 +34,21 @@ class SyncInstagramInsights extends Command
         $this->newLine();
 
         if ($backfill) {
+            // Before the first API call, not after several hundred: the walk
+            // reads the cursor (null on a missing column, which Eloquent does
+            // not complain about) and only fails when it writes it back.
+            $missing = SchemaGuard::missing([
+                'social_accounts.media_cursor',
+                'social_accounts.media_backfilled_at',
+            ]);
+
+            if ($missing !== []) {
+                $this->error(SchemaGuard::explain($missing));
+                $this->newLine();
+
+                return self::FAILURE;
+            }
+
             $this->line('  Mode: <options=bold>LANJUT</> — menyambung dari posisi terakhir, tanpa batas usia');
             $this->reportCursors();
         } else {

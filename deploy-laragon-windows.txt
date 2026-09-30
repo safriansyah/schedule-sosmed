@@ -777,6 +777,70 @@ scheduler jalan, riwayat akan terisi sendiri dalam beberapa hari tanpa
 diketik manual.
 
 --------------------------------------------------------------------------------
+MEMINDAHKAN PERUBAHAN KE KOMPUTER SERVER
+--------------------------------------------------------------------------------
+
+CARA YANG BENAR: pakai git.
+
+    (di komputer server)
+    git pull
+    composer install --no-dev -o
+    npm install && npm run build
+    php artisan migrate --force
+    php artisan config:clear
+    php artisan view:clear
+
+Git membawa SEMUA yang berubah. Menyalin folder secara manual tidak.
+
+-- KENAPA MENYALIN FOLDER SERING GAGAL --
+
+Yang terlihat berubah biasanya app/, resources/, routes/, tests/ -- dan itu
+memang yang paling sering. Tapi perubahan hampir selalu ikut menyentuh:
+
+    database/migrations/    <-- kolom baru. INI yang paling sering ketinggalan
+    database/seeders/       <-- role & izin baru
+    config/                 <-- pengaturan baru
+    composer.json           <-- perintah & dependensi
+
+Gejala kalau database/migrations/ ketinggalan:
+
+    SQLSTATE[42S22]: Column not found: 1054 Unknown column 'media_cursor'
+
+Sejak 30 Sep 2026, perintah backfill memeriksa ini SEBELUM memanggil API dan
+menyebutkan perbaikannya. Dulu ia menelan ratusan panggilan API dulu, baru
+gagal -- karena Eloquent mengembalikan null untuk kolom yang tidak ada, tanpa
+mengeluh, jadi kegagalannya baru muncul saat menyimpan di akhir.
+
+-- KALAU TERPAKSA MENYALIN MANUAL --
+
+Salin SEMUA kecuali empat ini:
+
+    vendor/          (hasil composer install)
+    node_modules/    (hasil npm install)
+    storage/         (upload & log komputer asal -- JANGAN ditimpa)
+    .env             (kunci & sandi database komputer asal -- JANGAN ditimpa)
+
+Lalu WAJIB:
+
+    php artisan migrate --force
+    php artisan config:clear
+    php artisan view:clear
+
+-- SETELAH PINDAH, PERIKSA --
+
+    php artisan migrate:status      semua "Ran"?
+    php artisan monitoring:diagnose data & akun sehat?
+    php artisan schedule:list       14 tugas terdaftar?
+
+-- KALAU ADA ROLE ATAU IZIN BARU --
+
+    php artisan db:seed --class=RolePermissionSeeder --force
+
+    Ini AMAN diulang: hanya menulis role & izin, tidak menyentuh data lain.
+    JANGAN jalankan `php artisan db:seed` tanpa --class: itu memanggil
+    DatabaseSeeder lengkap, yang ikut memasukkan data contoh mahasiswa & tugas.
+
+--------------------------------------------------------------------------------
 KALAU KOMPUTER MATI, LALU DINYALAKAN LAGI
 --------------------------------------------------------------------------------
 
