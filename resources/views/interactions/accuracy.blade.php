@@ -22,7 +22,7 @@
         </div>
     </x-slot:header>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-3">
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3">
         <x-stat-card label="Perkiraan akurasi"
                      :value="$accuracy['rate'] !== null ? $accuracy['rate'].'%' : '—'"
                      icon="target"

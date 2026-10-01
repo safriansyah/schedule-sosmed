@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\ClassifyInteractions;
+use App\Models\Interaction;
 use App\Services\AI\ClassifierManager;
 use App\Services\AI\GeminiClassifier;
 use App\Services\AI\OpenAiCompatibleClassifier;
@@ -13,7 +14,9 @@ class ClassifyInteractionsCommand extends Command
     protected $signature = 'interactions:classify
                             {--test= : Klasifikasikan satu kalimat langsung tanpa menyentuh database}
                             {--check : Cek koneksi ke penyedia AI yang sedang dipilih}
-                            {--queue : Kirim ke queue, jangan jalankan sekarang}';
+                            {--queue : Kirim ke queue, jangan jalankan sekarang}
+                            {--putaran=1 : Jalankan beberapa batch sekaligus (1 batch = crm.ai.per_run_limit)}
+                            {--jeda=5 : Jeda detik antar putaran, supaya kuota API tidak dihantam}';
 
     protected $description = 'Klasifikasikan komentar & DM yang belum dinilai (sentimen, intent, urgensi)';
 
@@ -36,20 +39,94 @@ class ClassifyInteractionsCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->info('Mengklasifikasikan interaksi yang belum dinilai…');
+        return $this->classifyBacklog($classifier);
+    }
 
-        $stats = app(ClassifyInteractions::class)->handle($classifier);
+    /**
+     * Work through the backlog.
+     *
+     * This command has always RESUMED rather than restarted — pending() takes
+     * the next `per_run_limit` rows whose ai_classified_at is still null — so
+     * there is no --lanjut to add. What was missing is any sign of that: it
+     * reported what one batch did and nothing about what remained, so there was
+     * no way to tell whether running it again would do anything.
+     *
+     * --putaran chews through several batches in one go, with a pause between,
+     * for the case this was really about: a few thousand comments arriving at
+     * once after a fresh scrape.
+     */
+    private function classifyBacklog(ClassifierManager $classifier): int
+    {
+        $rounds = max(1, (int) $this->option('putaran'));
+        $pause = max(0, (int) $this->option('jeda'));
+        $perRound = max(1, (int) config('crm.ai.per_run_limit', 200));
 
-        if ($stats['classified'] === 0) {
-            $this->line('Tidak ada yang perlu diklasifikasikan.');
+        $pending = Interaction::unclassified()->count();
+
+        $this->newLine();
+        $this->line('  Driver     : <fg=cyan>'.config('crm.ai.driver', 'rule').'</>');
+        $this->line('  Belum dinilai: '.number_format($pending));
+
+        if ($pending === 0) {
+            $this->newLine();
+            $this->line('  Tidak ada yang perlu diklasifikasikan.');
+            $this->newLine();
 
             return self::SUCCESS;
         }
 
+        $this->line(sprintf('  Rencana    : %d putaran x %s = maksimal %s interaksi',
+            $rounds, number_format($perRound), number_format($rounds * $perRound)));
+        $this->newLine();
+
+        $totals = ['classified' => 0, 'urgent' => 0, 'from_cache' => 0, 'from_llm' => 0];
+
+        for ($round = 1; $round <= $rounds; $round++) {
+            $stats = app(ClassifyInteractions::class)->handle($classifier);
+
+            foreach ($totals as $key => $value) {
+                $totals[$key] = $value + ($stats[$key] ?? 0);
+            }
+
+            if ($rounds > 1) {
+                $this->line(sprintf('    putaran %d/%d — %s dinilai (%s dari cache, %s dari AI)',
+                    $round, $rounds,
+                    number_format($stats['classified']),
+                    number_format($stats['from_cache']),
+                    number_format($stats['from_llm'])));
+            }
+
+            // Backlog exhausted: further rounds would query an empty set.
+            if ($stats['classified'] === 0) {
+                break;
+            }
+
+            if ($pause > 0 && $round < $rounds) {
+                sleep($pause);
+            }
+        }
+
+        $left = Interaction::unclassified()->count();
+
+        $this->newLine();
         $this->table(
-            ['Diklasifikasi', 'Mendesak', 'Dari cache', 'Dari AI'],
-            [[$stats['classified'], $stats['urgent'], $stats['from_cache'], $stats['from_llm']]],
+            ['Diklasifikasi', 'Mendesak', 'Dari cache', 'Dari AI', 'Sisa'],
+            [[
+                number_format($totals['classified']),
+                number_format($totals['urgent']),
+                number_format($totals['from_cache']),
+                number_format($totals['from_llm']),
+                number_format($left),
+            ]],
         );
+
+        if ($left > 0) {
+            $this->line('  Lanjutkan: <options=bold>php artisan interactions:classify --putaran='
+                .max(1, (int) ceil($left / $perRound)).'</>');
+            $this->line('  <fg=gray>Atau biarkan saja — penjadwal menjalankannya tiap 15 menit.</>');
+        }
+
+        $this->newLine();
 
         return self::SUCCESS;
     }

@@ -27,7 +27,7 @@
     </div>
 
     {{-- Row 1: what needs doing --}}
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <x-stat-card label="Lewat batas waktu" :value="number_format($stats['sla_breach'])"
                      icon="alert" tone="rose" :tint="$stats['sla_breach'] > 0"
                      :href="route('interactions.index', ['tab' => 'urgent'])"

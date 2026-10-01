@@ -24,7 +24,7 @@
     </div>
 
     @if ($handling['students'])
-        <div class="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="mb-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
             <x-stat-card label="Total mahasiswa" :value="number_format($handling['students']['total'])"
                          icon="users" tone="brand" :href="route('students.index')"/>
             <x-stat-card label="Belum assigned" :value="number_format($handling['students']['unassigned'])"

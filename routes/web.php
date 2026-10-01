@@ -85,6 +85,8 @@ Route::middleware('auth')->group(function () {
 
     // Manual data sync — throttled to protect the API quota
     Route::post('sync', [SyncController::class, 'store'])->middleware('throttle:6,1')->name('sync.now');
+    // Polled by the button while a run is in flight. Cheap: one cache read.
+    Route::get('sync/status', [SyncController::class, 'show'])->name('sync.status');
 
     // Live performance of connected accounts and their posts
     Route::get('monitoring', [MonitoringController::class, 'index'])->name('monitoring.index');
@@ -203,6 +205,7 @@ Route::middleware('auth')->group(function () {
     Route::get('students/import/template', [StudentImportController::class, 'template'])->name('students.import.template');
     Route::get('students/import/{import}/preview', [StudentImportController::class, 'preview'])->name('students.import.preview');
     Route::post('students/import/{import}/confirm', [StudentImportController::class, 'confirm'])->name('students.import.confirm');
+    Route::post('students/import/{import}/run', [StudentImportController::class, 'run'])->name('students.import.run');
     Route::get('students/import/{import}/status', [StudentImportController::class, 'status'])->name('students.import.status');
     Route::get('students/import/{import}/errors', [StudentImportController::class, 'errors'])->name('students.import.errors');
     Route::get('students/import/{import}', [StudentImportController::class, 'show'])->name('students.import.show');

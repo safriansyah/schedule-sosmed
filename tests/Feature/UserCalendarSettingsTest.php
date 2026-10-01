@@ -1,5 +1,5 @@
 <?php
-use App\Enums\{ContentStatus, RoleName};
+use App\Enums\{ContentStatus, Permission, RoleName};
 use App\Models\{Content, Role, User};
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 
@@ -53,8 +53,19 @@ it('prevents an admin from deleting or deactivating themselves', function () {
     expect($admin->fresh()->is_active)->toBeTrue();
 });
 
-it('shows the calendar to every role', function () {
-    foreach (RoleName::cases() as $role) {
+it('shows the calendar to every role that may see it', function () {
+    // Roles that hold the permission, not every role there is. "Operator Follow
+// Up" deliberately does without the read baseline the other roles share — its
+// whole job is following up its own tickets — so iterating RoleName::cases()
+// here would assert that a restricted role is not restricted.
+    $roles = array_filter(
+        RoleName::cases(),
+        fn (RoleName $r) => User::withRole($r)->firstOrFail()->hasPermission(Permission::ViewCalendar),
+    );
+
+    expect($roles)->not->toBeEmpty();
+
+    foreach ($roles as $role) {
         $this->actingAs(User::withRole($role)->firstOrFail())
             ->get(route('calendar.index'))->assertOk()->assertSee('Kalender');
     }

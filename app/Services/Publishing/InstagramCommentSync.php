@@ -38,11 +38,24 @@ class InstagramCommentSync
     ) {}
 
     /**
+     * Two modes, deliberately different.
+     *
+     * REFRESH (default) re-reads the newest posts within the age window. New
+     * comments land on recent posts, so this is what keeps the inbox current.
+     * It revisits the same posts on purpose.
+     *
+     * BACKFILL (`$backfill`) takes only posts whose comments have NEVER been
+     * fetched, newest-first, and ignores the age window. Each run therefore
+     * advances through history instead of repeating the previous run, which is
+     * what makes "40 now, 40 again later, until all 2.200 are covered"
+     * actually terminate. Without it the refresh mode alone could never reach
+     * post 41.
+     *
      * @param  int|null  $maxPostsOverride  Cap posts per account (e.g. a smaller
      *                                       number for the synchronous manual button).
      * @return array{posts:int, comments:int, failed:int}
      */
-    public function syncAll(?int $maxPostsOverride = null): array
+    public function syncAll(?int $maxPostsOverride = null, bool $backfill = false): array
     {
         $totals = ['posts' => 0, 'comments' => 0, 'failed' => 0];
 
@@ -58,8 +71,12 @@ class InstagramCommentSync
                 ->whereNotNull('permalink')
                 ->orderByDesc('posted_at');
 
-            // Comments arrive mostly on recent posts — don't waste calls on old ones.
-            if ($maxAge > 0) {
+            if ($backfill) {
+                $query->whereNull('comments_synced_at');
+            } elseif ($maxAge > 0) {
+                // Comments arrive mostly on recent posts — don't waste calls on
+                // old ones. The window is skipped entirely when backfilling,
+                // because reaching the old posts is the whole point there.
                 $query->where(fn ($q) => $q
                     ->whereNull('posted_at')
                     ->orWhere('posted_at', '>=', now()->subDays($maxAge)));
@@ -67,8 +84,26 @@ class InstagramCommentSync
 
             foreach ($query->limit(max(1, $maxPosts))->get() as $media) {
                 try {
-                    $totals['comments'] += $this->syncMedia($media);
+                    $stored = $this->syncMedia($media);
+
+                    // null means the viewer could not be read at all. Leaving
+                    // the post unstamped is the point: the viewer is unofficial
+                    // and goes down, and stamping on a failed read would mark a
+                    // whole batch as covered during an outage and never look at
+                    // it again.
+                    if ($stored === null) {
+                        $totals['failed']++;
+
+                        continue;
+                    }
+
+                    $totals['comments'] += $stored;
                     $totals['posts']++;
+
+                    // Stamped even when the post had no comments: a post that is
+                    // simply quiet must not sit at the head of the backfill
+                    // queue forever, blocking every post behind it.
+                    $media->forceFill(['comments_synced_at' => now()])->saveQuietly();
                 } catch (Throwable $e) {
                     $totals['failed']++;
                     Log::warning("Gagal sinkron komentar media {$media->external_id}: ".$e->getMessage());
@@ -79,11 +114,40 @@ class InstagramCommentSync
         return $totals;
     }
 
-    /** Fetch and store the comments for a single post. Returns the count stored. */
-    public function syncMedia(AccountMedia $media): int
+    /**
+     * How far the comment backfill has got, for the command to report and for
+     * anyone wondering whether it is worth running again.
+     *
+     * @return array{total:int, done:int, remaining:int}
+     */
+    public function progress(): array
+    {
+        $ids = SocialAccount::active()
+            ->where('platform', SocialPlatform::Instagram->value)
+            ->pluck('id');
+
+        $base = AccountMedia::whereIn('social_account_id', $ids)->whereNotNull('permalink');
+
+        $total = (clone $base)->count();
+        $done = (clone $base)->whereNotNull('comments_synced_at')->count();
+
+        return ['total' => $total, 'done' => $done, 'remaining' => $total - $done];
+    }
+
+    /**
+     * Fetch and store the comments for a single post.
+     *
+     * Returns the number stored, or NULL when the viewer could not be read —
+     * a distinction the caller needs, because "no comments" is a finished post
+     * and "could not reach the viewer" is one to come back to. Collapsing both
+     * to 0 is what let a backfill mark posts as covered during an outage.
+     */
+    public function syncMedia(AccountMedia $media): ?int
     {
         $shortcode = $this->shortcodeFrom($media->permalink);
 
+        // A permalink we cannot parse will never become parseable, so this
+        // counts as finished rather than unreachable.
         if ($shortcode === null) {
             return 0;
         }
@@ -91,7 +155,7 @@ class InstagramCommentSync
         $comments = $this->fetch($shortcode);
 
         if ($comments === null) {
-            return 0;
+            return null;
         }
 
         $stored = 0;

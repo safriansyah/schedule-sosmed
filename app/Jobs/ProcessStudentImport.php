@@ -31,7 +31,9 @@ class ProcessStudentImport implements ShouldQueue
     {
         $import = StudentImport::find($this->importId);
 
-        if ($import) {
+        // Only a still-pending import. If the admin already ran it by hand
+        // because the worker was down, this late job must not import it twice.
+        if ($import && $import->status === StudentImport::STATUS_PENDING) {
             $service->import($import);
         }
     }

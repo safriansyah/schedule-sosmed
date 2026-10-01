@@ -45,8 +45,17 @@ it('shows notes in the calendar feed alongside content', function () {
         'starts_at' => now()->addDays(3)->toDateString(),
     ])->assertCreated();
 
-    // Every role can see the note on the calendar.
-    foreach (RoleName::cases() as $role) {
+    // Every role WITH calendar access can see the note.
+    // Roles that hold the permission, not every role there is. "Operator Follow
+// Up" deliberately does without the read baseline the other roles share — its
+// whole job is following up its own tickets — so iterating RoleName::cases()
+// here would assert that a restricted role is not restricted.
+    $roles = array_filter(
+        RoleName::cases(),
+        fn (RoleName $r) => User::withRole($r)->firstOrFail()->hasPermission(Permission::ViewCalendar),
+    );
+
+    foreach ($roles as $role) {
         $this->actingAs(User::withRole($role)->firstOrFail())
             ->getJson(route('calendar.events', [
                 'start' => now()->subWeek()->toDateString(),

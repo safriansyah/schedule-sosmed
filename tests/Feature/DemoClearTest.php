@@ -11,6 +11,7 @@
 use App\Models\Student;
 use App\Models\Task;
 use App\Models\Ticket;
+use Database\Seeders\InteractionDemoSeeder;
 use Database\Seeders\TicketDemoSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 
@@ -18,6 +19,14 @@ uses(DatabaseTransactions::class);
 
 it('removes the marked example rows', function () {
     Ticket::withTrashed()->where('extra->demo', true)->forceDelete();
+
+    // TicketDemoSeeder builds its Instagram example FROM a demo comment, and
+    // skips that example with a warning when there is none -- which is exactly
+    // what happens on a database that has been through data:reset. Seeding the
+    // prerequisite is what makes this test about the ticket seeder rather than
+    // about whatever happened to be left in the shared dev database.
+    $this->seed(InteractionDemoSeeder::class);
+
     $this->seed(TicketDemoSeeder::class);
 
     expect(Ticket::where('extra->demo', true)->count())->toBe(3);
@@ -68,6 +77,10 @@ it('leaves real rows alone', function () {
 
 it('reports without deleting on a dry run', function () {
     Ticket::withTrashed()->where('extra->demo', true)->forceDelete();
+
+    // Same prerequisite as above: without a demo comment the seeder produces
+    // two examples, not three.
+    $this->seed(InteractionDemoSeeder::class);
     $this->seed(TicketDemoSeeder::class);
 
     $this->artisan('demo:clear --dry-run')->assertSuccessful();

@@ -45,25 +45,27 @@
 @endphp
 
 <{{ $tag }} @if ($href) href="{{ $href }}" @endif
-    class="card-glow group relative block overflow-hidden p-5 {{ $tintClass }}">
+    class="card-glow group relative block overflow-hidden p-3.5 sm:p-5 {{ $tintClass }}">
 
     <div class="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-gradient-to-br {{ $toneClass }} opacity-70 blur-2xl"></div>
 
-    <div class="relative flex items-start justify-between gap-3">
+    <div class="relative flex items-start justify-between gap-2 sm:gap-3">
         <div class="min-w-0">
-            <p class="truncate text-xs font-medium uppercase tracking-wide text-slate-400">{{ $label }}</p>
+            {{-- Two lines on a phone, where two cards share a row and a long label
+                 would otherwise be cut to "MENUNGG…". --}}
+            <p class="line-clamp-2 text-[11px] font-medium uppercase leading-tight tracking-wide text-slate-400 [overflow-wrap:anywhere] sm:line-clamp-1 sm:text-xs sm:leading-normal">{{ $label }}</p>
 
-            <p class="mt-2 text-3xl font-extrabold tracking-tight text-slate-800 dark:text-white">
+            <p class="mt-1.5 text-2xl font-extrabold tracking-tight text-slate-800 sm:mt-2 sm:text-3xl dark:text-white">
                 {{ $value }}
             </p>
 
             @if ($hint)
-                <p class="mt-1 truncate text-xs text-slate-400">{{ $hint }}</p>
+                <p class="mt-1 line-clamp-2 text-[11px] leading-tight text-slate-400 sm:line-clamp-1 sm:text-xs sm:leading-normal">{{ $hint }}</p>
             @endif
         </div>
 
-        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br {{ $toneClass }}">
-            <x-icon :name="$icon" class="h-5 w-5"/>
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br sm:h-11 sm:w-11 sm:rounded-2xl {{ $toneClass }}">
+            <x-icon :name="$icon" class="h-4 w-4 sm:h-5 sm:w-5"/>
         </span>
     </div>
 

@@ -12,7 +12,7 @@
         </a>
     </x-slot:header>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <x-stat-card label="Total kontak" :value="number_format($stats['total'])" icon="users" tone="brand"/>
         <x-stat-card label="Agent aktif" :value="number_format($stats['agents'])" icon="badge-check" tone="emerald"
                      :href="route('contacts.agents')"/>
@@ -78,9 +78,9 @@
                            description="Kontak terbentuk otomatis dari komentar yang masuk. Jalankan sinkron komentar dulu."/>
         </div>
     @else
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             @foreach ($contacts as $contact)
-                <a href="{{ route('contacts.show', $contact) }}" class="card-glow group block p-4">
+                <a href="{{ route('contacts.show', $contact) }}" class="card-glow group block min-w-0 p-4">
                     <div class="flex items-start gap-3">
                         <span class="avatar relative h-11 w-11 shrink-0 overflow-hidden text-sm">
                             {{ $contact->initial() }}

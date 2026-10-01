@@ -36,7 +36,7 @@
     @endif
 
     {{-- Workflow counters, each compared to the previous window --}}
-    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         @foreach ($workflow as $key => $card)
             <x-stat-card
                 tint

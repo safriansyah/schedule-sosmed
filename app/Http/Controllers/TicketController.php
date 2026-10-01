@@ -7,6 +7,7 @@ use App\Enums\FollowUpOutcome;
 use App\Enums\Permission;
 use App\Enums\FollowUpStatus;
 use App\Enums\Priority;
+use App\Enums\RoleName;
 use App\Enums\TicketFlag;
 use App\Enums\TicketSource;
 use App\Enums\TicketStatus;
@@ -558,13 +559,26 @@ class TicketController extends Controller
         ];
     }
 
-    /** @return \Illuminate\Support\Collection<int, User> */
+    /**
+     * Everyone a ticket can be handed to. Operator Follow Up is included: it
+     * is the role that exists only to work tickets assigned to it.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
     private function operators()
     {
+        $roles = array_map(fn (RoleName $r) => $r->value, [
+            RoleName::FollowUp, RoleName::Operator, RoleName::Pic, RoleName::Manager, RoleName::SuperAdmin,
+        ]);
+
         return User::query()
             ->active()
-            ->whereHas('role', fn ($q) => $q->whereIn('name', ['operator', 'pic', 'manager', 'super_admin']))
+            ->whereHas('role', fn ($q) => $q->whereIn('name', $roles))
+            ->with('role:id,name,label')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'role_id'])
+            // Grouped by role in the dropdown, in the order listed above.
+            ->sortBy(fn (User $u) => array_search($u->role?->name?->value, $roles, true))
+            ->values();
     }
 }

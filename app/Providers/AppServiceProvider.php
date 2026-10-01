@@ -72,7 +72,23 @@ class AppServiceProvider extends ServiceProvider
         ];
     }
 
-    /** @return array<string, int> */
+    /**
+     * @return array<string, int>
+     *
+     * Every alias here ends in `_total` for a reason. An aggregate aliased to
+     * the name of a real column is handed to the model as that column, so the
+     * cast runs on it: `SUM(needs_reply = 1) as needs_reply` came back as the
+     * BOOLEAN true, and `(int) true` is 1. The sidebar therefore said "1" next
+     * to a tab holding 27 items, for months, with no error anywhere — the
+     * other three aliases (urgent, question, mine) are not column names, so
+     * only this one badge was wrong, which made it look like a counting bug
+     * rather than a casting one.
+     *
+     * The filters also have to match InteractionController::applyTab(), or the
+     * badge promises work the tab does not contain — hence withoutTicket()
+     * below: an interaction that has become a ticket is worked in Ticketing,
+     * and the inbox tabs exclude it.
+     */
     private function interactionBadges(): array
     {
         $open = [InteractionStatus::New->value, InteractionStatus::InProgress->value];
@@ -82,21 +98,22 @@ class AppServiceProvider extends ServiceProvider
         $row = Interaction::query()
             ->where('direction', 'inbound')
             ->whereIn('status', $open)
+            ->whereDoesntHave('ticket')
             ->selectRaw('
-                SUM(is_urgent = 1) as urgent,
-                SUM(intent = ?) as question,
-                SUM(needs_reply = 1) as needs_reply,
-                SUM(assigned_to = ?) as mine
+                SUM(is_urgent = 1) as urgent_total,
+                SUM(intent = ?) as question_total,
+                SUM(needs_reply = 1) as needs_reply_total,
+                SUM(assigned_to = ?) as mine_total
             ', [Intent::Question->value, Auth::id()])
             ->first();
 
-        $urgent = (int) ($row->urgent ?? 0);
+        $urgent = (int) ($row->urgent_total ?? 0);
 
         return [
             'interactions.indexurgent' => $urgent,
-            'interactions.indexquestion' => (int) ($row->question ?? 0),
-            'interactions.indexneeds_reply' => (int) ($row->needs_reply ?? 0),
-            'interactions.indexmine' => (int) ($row->mine ?? 0),
+            'interactions.indexquestion' => (int) ($row->question_total ?? 0),
+            'interactions.indexneeds_reply' => (int) ($row->needs_reply_total ?? 0),
+            'interactions.indexmine' => (int) ($row->mine_total ?? 0),
             // The group header shows only what is genuinely alarming, so the
             // red dot means "reputational risk", not "there is mail".
             'Inbox Interaksi' => $urgent,

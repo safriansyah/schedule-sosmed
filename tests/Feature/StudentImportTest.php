@@ -387,3 +387,114 @@ it('imports a large file in one pass', function () {
         ->and($import->imported_count)->toBe(2000)
         ->and(Student::where('nim', 'like', 'BULK%')->count())->toBe(2000);
 });
+
+/* -----------------------------------------------------------------
+ | Lifecycle: upload → confirm → result
+ * ----------------------------------------------------------------- */
+
+function importAdmin(): User
+{
+    return User::withRole(\App\Enums\RoleName::SuperAdmin)->firstOrFail();
+}
+
+it('keeps an unconfirmed upload off the result page', function () {
+    // The bug: an upload nobody confirmed sat at "pending", and its result
+    // page showed "Import sedang berjalan…" forever because no job existed.
+    $import = app(StudentImportService::class)
+        ->preview(csvUpload("nim,nama\nIMP0000200,Belum Konfirmasi\n"), importAdmin())['import'];
+
+    expect($import->status)->toBe(StudentImport::STATUS_UPLOADED)
+        ->and($import->isStalled())->toBeFalse();
+
+    $this->actingAs(importAdmin())
+        ->get(route('students.import.show', $import))
+        ->assertRedirect(route('students.import.preview', $import));
+});
+
+it('lets a stalled import be run by hand when the worker is down', function () {
+    config()->set('students.queued', true);
+    \Illuminate\Support\Facades\Queue::fake();
+
+    $service = app(StudentImportService::class);
+    $import = $service->preview(csvUpload("nim,nama\nIMP0000210,Antrean Mati\n"), importAdmin())['import'];
+    $service->dispatch($import);
+
+    // Not stalled yet: the worker gets a fair chance first.
+    $this->actingAs(importAdmin())->getJson(route('students.import.status', $import))
+        ->assertJson(['status' => 'pending', 'stalled' => false]);
+
+    $this->travel(1)->minutes();
+
+    $this->actingAs(importAdmin())->getJson(route('students.import.status', $import))
+        ->assertJson(['stalled' => true]);
+
+    $this->actingAs(importAdmin())
+        ->post(route('students.import.run', $import))
+        ->assertRedirect(route('students.import.show', $import));
+
+    expect($import->refresh()->status)->toBe(StudentImport::STATUS_COMPLETED)
+        ->and(Student::where('nim', 'IMP0000210')->exists())->toBeTrue();
+
+    // The job, arriving late once the worker is back, must not run it again.
+    (new \App\Jobs\ProcessStudentImport($import->id))->handle($service);
+
+    expect($import->refresh()->imported_count)->toBe(1)
+        ->and($import->updated_count)->toBe(0);
+});
+
+/* -----------------------------------------------------------------
+ | Files that are not what their name says
+ * ----------------------------------------------------------------- */
+
+it('refuses an old binary .xls with a message instead of a server error', function () {
+    $path = tempnam(sys_get_temp_dir(), 'old_').'.xls';
+    file_put_contents($path, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1".str_repeat("\0", 504));
+
+    $this->actingAs(importAdmin())
+        ->from(route('students.import.index'))
+        ->post(route('students.import.store'), [
+            'file' => new UploadedFile($path, 'lama.xls', 'application/vnd.ms-excel', null, true),
+        ])
+        ->assertRedirect(route('students.import.index'))
+        ->assertSessionHasErrors(['file' => 'Berkas ini format Excel lama (.xls 97-2003) atau dilindungi kata sandi. Buka di Excel, hapus kata sandinya bila ada, lalu Simpan Sebagai "Excel Workbook (.xlsx)" dan unggah ulang.']);
+});
+
+it('reads an xlsx that was renamed .xls, and a CSV that was renamed .xls', function () {
+    $path = tempnam(sys_get_temp_dir(), 'renamed_').'.xlsx';
+    (new XlsxWriter)->write($path, ['nim', 'nama'], [['IMP0000220', 'Xlsx Bernama Xls']]);
+
+    $xlsx = runImport(new UploadedFile($path, 'export.xls', null, null, true));
+
+    // Tab-separated text is what many "export to Excel" buttons really send.
+    $tsv = runImport(csvUpload("nim\tnama\nIMP0000221\tTeks Bernama Xls\n", 'export.xls'));
+
+    expect($xlsx->extension)->toBe('xlsx')
+        ->and($xlsx->imported_count)->toBe(1)
+        ->and($tsv->extension)->toBe('csv')
+        ->and($tsv->imported_count)->toBe(1)
+        ->and(Student::where('nim', 'IMP0000221')->value('nama'))->toBe('Teks Bernama Xls');
+});
+
+it('converts a CSV saved as ANSI by Windows Excel', function () {
+    $import = runImport(csvUpload("nim,nama\nIMP0000230,D\xE9sa Ren\xE9\n"));
+
+    expect($import->status)->toBe(StudentImport::STATUS_COMPLETED)
+        ->and(Student::where('nim', 'IMP0000230')->value('nama'))->toBe('Désa René');
+});
+
+it('cuts over-long cells to fit instead of failing the whole import', function () {
+    $import = runImport(csvUpload(
+        "nim,nama,mri\n"
+        .'IMP0000240,'.str_repeat('Panjang ', 60).','.str_repeat('9', 40)."\n"
+        .str_repeat('7', 40).",NIM Kepanjangan,1\n"
+    ));
+
+    $student = Student::where('nim', 'IMP0000240')->first();
+
+    expect($import->status)->toBe(StudentImport::STATUS_COMPLETED)
+        ->and($import->imported_count)->toBe(1)
+        ->and($import->failed_count)->toBe(1)
+        ->and(mb_strlen($student->nama))->toBe(255)
+        ->and(mb_strlen($student->mri))->toBe(16)
+        ->and($import->errors[0]['reason'])->toContain('NIM terlalu panjang');
+});

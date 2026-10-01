@@ -20,7 +20,7 @@
         </div>
     </x-slot:header>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         <x-stat-card label="Total task" :value="number_format($stats['total'])" icon="calendar" tone="brand"/>
         <x-stat-card label="Direncanakan" :value="number_format($stats['planned'])" icon="clock" tone="slate"/>
         <x-stat-card label="Berjalan" :value="number_format($stats['in_progress'])" icon="refresh" tone="cyan"/>
@@ -32,7 +32,7 @@
 
     {{-- Window + filters --}}
     <form method="GET" class="card mb-6 p-4">
-        <div class="grid gap-3 lg:grid-cols-12">
+        <div class="grid grid-cols-2 gap-3 lg:grid-cols-12">
             <div class="lg:col-span-2">
                 <label for="from" class="label">Dari tanggal</label>
                 <input id="from" name="from" type="date" value="{{ $from->toDateString() }}" class="input">
@@ -43,7 +43,7 @@
                 <input id="to" name="to" type="date" value="{{ $to->toDateString() }}" class="input">
             </div>
 
-            <div class="lg:col-span-3">
+            <div class="col-span-2 lg:col-span-3">
                 <label for="q" class="label">Cari</label>
                 <input id="q" name="q" value="{{ $filters['q'] ?? '' }}" class="input" placeholder="Judul task…">
             </div>
@@ -71,7 +71,7 @@
                 </select>
             </div>
 
-            <div class="flex items-end lg:col-span-1">
+            <div class="col-span-2 flex items-end lg:col-span-1">
                 <button class="btn-primary w-full"><x-icon name="filter" class="h-4 w-4"/></button>
             </div>
         </div>

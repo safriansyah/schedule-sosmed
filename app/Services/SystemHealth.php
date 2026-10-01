@@ -67,10 +67,21 @@ class SystemHealth
      */
     public static function howToStart(): string
     {
-        // Keyed on "is this a production deployment", not on the literal
-        // environment name: local, testing and staging are all places where
-        // somebody is running the app by hand, and only a real server has a
-        // crontab to edit.
+        // Keyed on the OPERATING SYSTEM first, not on the environment name.
+        //
+        // Keying on isProduction() alone was wrong for the deployment this
+        // actually has: a Windows machine on the office network, running
+        // `composer run dev:lan`, with APP_ENV=production set because the app
+        // is reachable from the internet through a tunnel. That box has no
+        // crontab, so "add a line to cron" sent the reader hunting for a
+        // daemon Windows does not have — and the scheduler stayed down while
+        // they looked.
+        if (PHP_OS_FAMILY === 'Windows') {
+            return 'Jalankan `composer run dev:lan` — satu perintah itu menyalakan server, queue, '
+                .'dan penjadwal sekaligus. Jendelanya harus tetap terbuka; untuk server yang menyala '
+                .'terus, pasang lewat Task Scheduler.';
+        }
+
         return app()->isProduction()
             ? 'Tambahkan satu baris cron di server: * * * * * php artisan schedule:run'
             : 'Jalankan `composer run dev` — satu perintah itu menyalakan server, queue, dan penjadwal sekaligus.';

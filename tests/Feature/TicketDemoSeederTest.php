@@ -3,6 +3,7 @@
 use App\Enums\TicketStatus;
 use App\Models\Student;
 use App\Models\Ticket;
+use Database\Seeders\InteractionDemoSeeder;
 use Database\Seeders\TicketDemoSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 
@@ -15,6 +16,13 @@ uses(DatabaseTransactions::class);
  */
 it('seeds three readable examples and shows them on the ticket list', function () {
     Ticket::withTrashed()->where('extra->demo', true)->forceDelete();
+
+    // TicketDemoSeeder builds its Instagram example FROM a demo comment, and
+    // skips that example with a warning when there is none -- which is exactly
+    // what happens on a database that has been through data:reset. Seeding the
+    // prerequisite is what makes this test about the ticket seeder rather than
+    // about whatever happened to be left in the shared dev database.
+    $this->seed(InteractionDemoSeeder::class);
 
     $this->seed(TicketDemoSeeder::class);
 

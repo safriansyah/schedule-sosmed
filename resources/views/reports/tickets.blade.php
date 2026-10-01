@@ -26,7 +26,7 @@
     </x-slot:header>
 
     <form method="GET" class="card mb-6 p-4">
-        <div class="grid gap-3 lg:grid-cols-12">
+        <div class="grid grid-cols-2 gap-3 lg:grid-cols-12">
             <div class="lg:col-span-3">
                 <label for="source" class="label">Sumber</label>
                 <select id="source" name="source" class="input" onchange="this.form.submit()">
@@ -57,7 +57,7 @@
                 <input id="to" name="to" type="date" value="{{ $filters['to'] ?? '' }}" class="input">
             </div>
 
-            <div class="flex items-end gap-2 lg:col-span-2">
+            <div class="col-span-2 flex items-end gap-2 lg:col-span-2">
                 <button class="btn-primary flex-1"><x-icon name="filter" class="h-4 w-4"/></button>
                 @if ($hasFilter)
                     <a href="{{ route('reports.tickets') }}" class="btn-outline"><x-icon name="x" class="h-4 w-4"/></a>
@@ -97,7 +97,7 @@
     {{-- The three headline states the institution asked for. The six internal
          statuses are right for an operator working one ticket and too many for
          a report, so they are the drill-down underneath. --}}
-    <div class="mb-6 grid gap-3 sm:gap-4 md:grid-cols-4">
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <x-stat-card label="Total tiket" :value="number_format($total)" icon="file-text" tone="brand"/>
         <x-stat-card label="Open" :value="number_format($byStage['open'])" icon="inbox" tone="amber"/>
         <x-stat-card label="Pending" :value="number_format($byStage['pending'])" icon="clock" tone="violet"/>
@@ -161,7 +161,7 @@
          column in the status table: a Closed ticket can still be a Lead, and
          folding the two together would hide exactly the number the
          acquisition side is looking for. --}}
-    <div class="grid gap-3 sm:gap-4 md:grid-cols-4">
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <x-stat-card label="Tiket Lead" :value="number_format($flags['lead'])" icon="flame" tone="pink"/>
         <x-stat-card label="Tiket Netral" :value="number_format($flags['netral'])" icon="flag" tone="slate"/>
         <x-stat-card label="Follow up tercatat" :value="number_format($followUps['total'])" icon="phone" tone="violet"/>

@@ -15,6 +15,7 @@
         'failed'               => ['Gagal', 'badge-red', 'alert'],
 
         // Dataset import lifecycle (UT Analytic Sosmed)
+        'uploaded'             => ['Belum dikonfirmasi', 'badge-slate', 'upload'],
         'pending'              => ['Menunggu', 'badge-slate', 'clock'],
         'processing'           => ['Diproses', 'badge-amber', 'refresh'],
         'completed'            => ['Selesai', 'badge-green', 'check-circle'],

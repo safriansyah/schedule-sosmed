@@ -24,7 +24,7 @@
         </div>
     </x-slot:header>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-6">
         <x-stat-card label="Total tiket" :value="number_format($stats['total'])" icon="inbox" tone="brand"/>
         <x-stat-card label="Open" :value="number_format($stats['open'])" icon="sparkles" tone="amber"/>
         <x-stat-card label="Dikerjakan" :value="number_format($stats['assigned'] + $stats['in_progress'])" icon="refresh" tone="cyan"/>
@@ -34,8 +34,8 @@
     </div>
 
     <form method="GET" class="card mb-6 p-4">
-        <div class="grid gap-3 lg:grid-cols-12">
-            <div class="lg:col-span-3">
+        <div class="grid grid-cols-2 gap-3 lg:grid-cols-12">
+            <div class="col-span-2 lg:col-span-3">
                 <label for="q" class="label">Cari</label>
                 <div class="relative">
                     <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/>
@@ -65,7 +65,7 @@
                 </select>
             </div>
 
-            <div class="lg:col-span-2">
+            <div class="col-span-2 lg:col-span-2">
                 <label for="category" class="label">Kategori</label>
                 <select id="category" name="category" class="input">
                     <option value="">Semua kategori</option>
@@ -97,7 +97,7 @@
                 </select>
             </div>
 
-            <div class="flex items-end gap-2 lg:col-span-1">
+            <div class="col-span-2 flex items-end gap-2 lg:col-span-1">
                 <button class="btn-primary w-full"><x-icon name="filter" class="h-4 w-4"/></button>
                 @if (array_filter($filters))
                     <a href="{{ route($mine ? 'tickets.mine' : 'tickets.index') }}" class="btn-outline">

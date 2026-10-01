@@ -68,12 +68,37 @@
     html {
         scroll-behavior: smooth;
         -webkit-tap-highlight-color: transparent;
+        /* Stop phones inflating text on their own when rotated. */
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
+    /* Phones: the whole UI one step smaller ("zoomed out"). Every size is in
+       rem, so shrinking the root scales text, spacing and cards together and
+       more fits on one screen. Pinch zoom stays available. */
+    @media (max-width: 639px) {
+        html { font-size: 87.5%; }
+
+        /* Except form fields: iOS zooms the page in on any field under 16px
+           the moment it is tapped, and does not zoom back out. */
+        input:not([type=checkbox]):not([type=radio]):not([type=range]),
+        select,
+        textarea {
+            font-size: 16px !important;
+        }
     }
     body {
         @apply bg-slate-50 text-slate-700 antialiased;
         @apply dark:bg-ink-950 dark:text-slate-300;
     }
     [x-cloak] { display: none !important; }
+
+    /* A grid with no column count for phones ("grid lg:grid-cols-3") gets
+       one implicit column, and an implicit column is as wide as its widest
+       unbreakable content — a long URL or ID pushed whole pages sideways.
+       minmax(0, 1fr) holds it to the screen; explicit grid-cols-* are
+       untouched, since they set the template, not the implicit tracks. */
+    .grid { grid-auto-columns: minmax(0, 1fr); }
 
     /* Thin premium scrollbars */
     * { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / 0.4) transparent; }

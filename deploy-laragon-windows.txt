@@ -563,6 +563,8 @@ bikin "di laptop saya jalan, di HP orang lain tidak".
  9. MEMBERSIHKAN DATA CONTOH
 ================================================================================
 
+ 9.1  HANYA DATA CONTOH (aplikasi tetap berisi data asli Anda)
+
      php artisan demo:clear --dry-run      <- lihat dulu, tidak menghapus
      php artisan demo:clear                <- hapus, dengan konfirmasi
 
@@ -582,6 +584,52 @@ bikin "di laptop saya jalan, di HP orang lain tidak".
      php artisan interactions:demo
      php artisan tickets:demo
      php artisan crm:examples
+
+
+ 9.2  MENGOSONGKAN SEMUA DATA OPERASIONAL (serah terima ke pemakaian asli)
+
+ Dipakai saat komputer sudah selesai disiapkan dan mau dimulai dari nol —
+ tetapi akun, role, izin, dan identitas website yang sudah Anda atur TETAP ADA.
+
+     php artisan data:reset --dry-run      <- lihat daftarnya dulu
+     php artisan data:reset                <- kosongkan, dengan konfirmasi
+
+ YANG DISIMPAN (8 tabel)
+     migrations          versi skema — dihapus = Laravel mengira DB masih kosong
+     users               akun pengguna
+     roles               daftar role
+     permissions         daftar izin
+     permission_role     izin per role
+     settings            identitas website (nama, logo, favicon) & format ID tiket
+     regions             data acuan wilayah (hasil seeder)
+     ticket_categories   kategori & sub kategori tiket (hasil seeder)
+
+ YANG DIKOSONGKAN (38 tabel) — yang penting disebut:
+     social_accounts     TOKEN Instagram IKUT TERHAPUS — memang ini yang
+                         diinginkan kalau mau menyambung ke akun lain
+     students            data mahasiswa hasil import
+     tickets, ticket_details, ticket_assignments, follow_ups
+     interactions, contacts, contact_identities
+     account_media, media_comments, media_metrics, account_metrics
+     contents, schedules, approvals, verifications, revisions, posts
+     tasks, task_checks, datasets, dataset_items, tags, taggables
+     activities          riwayat audit masa uji coba
+     notifications
+     sessions            semua orang harus login ulang setelahnya
+     cache, jobs, failed_jobs   aman, dibangun ulang sendiri
+
+ PERINGATAN: TRUNCATE tidak bisa dibatalkan. Backup dulu kalau ragu:
+     mysqldump -u root -p namadatabase > backup-sebelum-reset.sql
+
+ SETELAH RESET, urutannya:
+     1. Login ulang (sesi lama sudah dihapus)
+     2. Sambungkan akun Instagram BARU lewat menu Akun Sosmed
+     3. Import data mahasiswa lewat menu Import Data
+     4. Periksa: php artisan data:reset --dry-run
+        Semua baris di bagian DIKOSONGKAN harus menunjukkan 0
+
+ CATATAN: perintah ini hanya ada di terminal, tidak ada tombolnya di aplikasi.
+ Penghapusan satu arah tidak pantas berada di balik satu klik.
 
 
 ================================================================================
@@ -689,3 +737,402 @@ bikin "di laptop saya jalan, di HP orang lain tidak".
   php artisan demo:clear --dry-run
 
 ================================================================================
+cd C:\laragon\www\schedule-sosmed
+
+php artisan accounts:sync-metrics      # 1. follower dll — cepat
+php artisan accounts:sync-insights     # 2. POSTINGAN — ini yang wajib duluan
+php artisan accounts:sync-comments     # 3. KOMENTAR — butuh langkah 2
+php artisan interactions:classify      # 4. penilaian AI
+php artisan contacts:resolve           # 5. cocokkan komentator ke kontak
+php artisan media:cache                # 6. simpan thumbnail lokal
+
+--------------------------------------------------------------------------------
+DUA MODE SINKRON — PENTING
+--------------------------------------------------------------------------------
+
+Perintah di atas berjalan dalam mode SEGARKAN: selalu mulai dari postingan
+TERBARU. Itu benar untuk pemakaian harian, karena komentar baru muncul di
+postingan baru. Tapi mode ini tidak akan pernah sampai ke postingan lama —
+dijalankan seratus kali pun, yang disentuh postingan yang itu-itu juga.
+
+Untuk menarik seluruh riwayat akun, pakai mode LANJUT. Tiap run menyambung dari
+posisi run sebelumnya, jadi dijalankan berulang = maju, bukan mengulang:
+
+  php artisan accounts:sync-insights --lanjut              # 1 halaman = 50 postingan
+  php artisan accounts:sync-insights --lanjut --halaman=5  # 250 postingan sekali jalan
+
+  php artisan accounts:sync-comments --lanjut              # 40 postingan berikutnya
+  php artisan accounts:sync-comments --lanjut --putaran=5  # 5 x 40 = 200, ada jeda
+
+Keduanya mencetak kemajuan, misalnya "Cakupan sekarang: 240 / 2.227". Kalau
+sudah habis, perintahnya bilang sendiri dan berhenti.
+
+Jendela usia (INSTAGRAM_MAX_AGE_DAYS, default 90 hari) hanya berlaku di mode
+segarkan. Mode --lanjut sengaja mengabaikannya — justru menembus ke belakang
+itulah tujuannya.
+
+Backfill ini juga sudah dijadwalkan otomatis (lihat routes/console.php):
+insights 2 halaman tiap 6 jam, komentar 40 postingan tiap 2 jam. Jadi kalau
+scheduler jalan, riwayat akan terisi sendiri dalam beberapa hari tanpa
+diketik manual.
+
+--------------------------------------------------------------------------------
+MEMINDAHKAN PERUBAHAN KE KOMPUTER SERVER
+--------------------------------------------------------------------------------
+
+CARA YANG DIPAKAI: zip - pindah - ekstrak, lewat dua skrip.
+
+    (di komputer ini, tempat mengoding)
+    .\kirim-update.ps1
+
+        Menghasilkan satu ZIP berisi SEMUANYA kecuali .env, storage\, vendor\,
+        node_modules\ dan .git\ -- lima hal yang memang milik komputer tujuan.
+        publicuild ikut, jadi komputer server tidak perlu npm sama sekali.
+        Skrip ini menolak membuat ZIP kalau database\migrations tidak ikut.
+
+    (di komputer server, setelah ZIP diekstrak MENIMPA folder aplikasi)
+    .\pasang-update.ps1
+
+        Menjalankan migrate, seeder role, dan membersihkan cache dengan urutan
+        yang benar, lalu berhenti kalau ada langkah yang gagal -- bukan
+        melanjutkan dengan pemasangan setengah jadi.
+
+    Tutup dulu jendela `composer run dev:lan` sebelum mengekstrak.
+
+
+ALTERNATIF: pakai git.
+
+    (di komputer server)
+    git pull
+    composer install --no-dev -o
+    npm install && npm run build
+    php artisan migrate --force
+    php artisan config:clear
+    php artisan view:clear
+
+Git membawa SEMUA yang berubah. Menyalin folder secara manual tidak.
+
+-- KENAPA MENYALIN FOLDER SERING GAGAL --
+
+Yang terlihat berubah biasanya app/, resources/, routes/, tests/ -- dan itu
+memang yang paling sering. Tapi perubahan hampir selalu ikut menyentuh:
+
+    database/migrations/    <-- kolom baru. INI yang paling sering ketinggalan
+    database/seeders/       <-- role & izin baru
+    config/                 <-- pengaturan baru
+    composer.json           <-- perintah & dependensi
+
+Gejala kalau database/migrations/ ketinggalan:
+
+    SQLSTATE[42S22]: Column not found: 1054 Unknown column 'media_cursor'
+
+Sejak 30 Sep 2026, perintah backfill memeriksa ini SEBELUM memanggil API dan
+menyebutkan perbaikannya. Dulu ia menelan ratusan panggilan API dulu, baru
+gagal -- karena Eloquent mengembalikan null untuk kolom yang tidak ada, tanpa
+mengeluh, jadi kegagalannya baru muncul saat menyimpan di akhir.
+
+-- KALAU TERPAKSA MENYALIN MANUAL --
+
+Salin SEMUA kecuali empat ini:
+
+    vendor/          (hasil composer install)
+    node_modules/    (hasil npm install)
+    storage/         (upload & log komputer asal -- JANGAN ditimpa)
+    .env             (kunci & sandi database komputer asal -- JANGAN ditimpa)
+
+Lalu WAJIB:
+
+    php artisan migrate --force
+    php artisan config:clear
+    php artisan view:clear
+
+-- SETELAH PINDAH, PERIKSA --
+
+    php artisan migrate:status      semua "Ran"?
+    php artisan monitoring:diagnose data & akun sehat?
+    php artisan schedule:list       14 tugas terdaftar?
+
+-- KALAU ADA ROLE ATAU IZIN BARU --
+
+    php artisan db:seed --class=RolePermissionSeeder --force
+
+    Ini AMAN diulang: hanya menulis role & izin, tidak menyentuh data lain.
+    JANGAN jalankan `php artisan db:seed` tanpa --class: itu memanggil
+    DatabaseSeeder lengkap, yang ikut memasukkan data contoh mahasiswa & tugas.
+
+--------------------------------------------------------------------------------
+PENTING: KONTEN TERJADWAL TIDAK BISA TERBIT DARI SERVER INTRANET
+--------------------------------------------------------------------------------
+
+Periksa sendiri:   php artisan content:check-publish
+
+Instagram TIDAK menerima file gambarnya. Ia menerima sebuah URL, lalu server
+Instagram yang mengunduh sendiri file itu. Kalau aplikasi dipasang di jaringan
+lokal, URL yang dikirim berbentuk:
+
+    http://10.15.10.221:5566/storage/media/foto.jpg
+
+Alamat 10.x.x.x hanya ada di dalam kantor. Server Instagram di internet tidak
+akan pernah bisa menjangkaunya, jadi kontainer media tidak pernah terbentuk dan
+konten terjadwal SELALU gagal.
+
+Ini bukan salah konfigurasi yang bisa diperbaiki dengan pengaturan. Begitulah
+cara kerja API penerbitan Instagram.
+
+Yang tetap BERJALAN NORMAL di intranet:
+    - scraping postingan & komentar      (aplikasi yang menghubungi Instagram)
+    - penilaian AI
+    - ticketing, data mahasiswa, task management, laporan
+    - monitoring & analitik
+
+Yang TIDAK bisa:
+    - menerbitkan konten otomatis ke Instagram
+
+TIGA PILIHAN
+
+  a. TERBITKAN MANUAL (paling sederhana, disarankan untuk intranet)
+     Pakai sistem ini untuk merencanakan jadwal, menyiapkan caption dan media,
+     lalu unggah manual lewat aplikasi Instagram pada waktunya. Semua fungsi
+     lain tetap jalan penuh.
+
+  b. BUKA AKSES MEDIA KE INTERNET LEWAT CLOUDFLARE TUNNEL
+     Lihat bagian "CLOUDFLARE TUNNEL" di bawah. Yang dibuka ke internet CUKUP
+     folder media saja -- aplikasinya tetap di jaringan lokal.
+
+  c. PASANG DI HOSTING PUBLIK
+     Lihat deploy-flow.txt (cPanel / Ubuntu). Ini satu-satunya cara penerbitan
+     otomatis berjalan tanpa syarat tambahan.
+
+--------------------------------------------------------------------------------
+CLOUDFLARE TUNNEL (supaya konten terjadwal bisa terbit)
+--------------------------------------------------------------------------------
+
+TUJUANNYA APA
+
+Instagram harus bisa MENGUNDUH file gambar dari internet. Hanya itu. Aplikasi
+ini sendiri tidak perlu dibuka ke internet -- dan sebaiknya memang tidak, karena
+di dalamnya ada data mahasiswa.
+
+Jadi yang dibuka hanya satu alamat untuk folder media:
+
+    https://media.domain-anda.ac.id/storage/...   -> dibuka ke internet
+    http://10.15.10.221:5566                      -> tetap di jaringan kantor
+
+Aplikasi sudah disiapkan untuk pemisahan ini. Dua pengaturan .env:
+
+    FILESYSTEM_PUBLIC_URL   alamat publik untuk media (dipakai Instagram)
+    APP_URL                 alamat aplikasi (biarkan alamat lokal)
+
+LANGKAH
+
+ 1. Pasang cloudflared di komputer server
+
+        winget install --id Cloudflare.cloudflared
+
+ 2. Login dan buat tunnel (sekali saja)
+
+        cloudflared tunnel login
+        cloudflared tunnel create sosmed-ut
+
+    Catat Tunnel ID yang muncul.
+
+ 3. Arahkan subdomain ke tunnel
+
+        cloudflared tunnel route dns sosmed-ut media.domain-anda.ac.id
+
+    Domainnya harus sudah dikelola Cloudflare (nameserver-nya mengarah ke
+    Cloudflare).
+
+ 4. Buat file konfigurasi
+
+    C:\Users\<user>\.cloudflared\config.yml
+
+        tunnel: sosmed-ut
+        credentials-file: C:\Users\<user>\.cloudflared\<TunnelID>.json
+
+        ingress:
+          # HANYA folder media yang dilayani.
+          - hostname: media.domain-anda.ac.id
+            path: ^/storage/.*
+            service: http://127.0.0.1:5566
+          # Sisanya ditolak -- halaman aplikasi tidak ikut terbuka.
+          - service: http_status:404
+
+    Aturan `path` itu yang menjaga data mahasiswa tetap di dalam. Tanpa baris
+    itu, SELURUH aplikasi ikut terbuka ke internet.
+
+ 5. Isi .env di komputer server
+
+        FILESYSTEM_PUBLIC_URL=https://media.domain-anda.ac.id/storage
+
+    APP_URL JANGAN diubah -- biarkan alamat lokal.
+
+        php artisan config:clear
+
+ 6. Jalankan tunnel sebagai layanan Windows (supaya hidup terus)
+
+        cloudflared service install
+        Start-Service cloudflared
+
+ 7. Periksa
+
+        php artisan content:check-publish
+
+    Harus berbunyi "SIAP -- konten terjadwal bisa terbit otomatis".
+
+    Lalu uji dari luar jaringan kantor (pakai data HP, matikan WiFi):
+
+        https://media.domain-anda.ac.id/storage/  -- gambar harus terbuka
+        https://media.domain-anda.ac.id/dashboard -- HARUS 404
+
+    Baris kedua itu pemeriksaan keamanannya. Kalau dashboard-nya terbuka,
+    aturan `path` di config.yml belum benar.
+
+PILIHAN B: SELURUH APLIKASI LEWAT DOMAIN (bisa domain DAN IP sekaligus)
+
+Ini yang dipakai kalau ingin lepas dari alamat IP: staf membuka domain, dan
+alamat IP tetap bisa dipakai di dalam kantor. Keduanya melayani dari satu
+pemasangan yang sama.
+
+    https://utpkpinsight.my.id        dari mana saja
+    http://10.15.10.221:5566          di dalam kantor
+
+  config.yml -- tanpa baris `path`, jadi seluruh aplikasi dilayani:
+
+        ingress:
+          - hostname: utpkpinsight.my.id
+            service: http://127.0.0.1:5566
+          - service: http_status:404
+
+  .env di komputer server:
+
+        APP_ENV=production
+        APP_DEBUG=false
+        APP_URL=https://utpkpinsight.my.id
+
+        # Kosongkan: media ikut APP_URL, dan APP_URL sudah publik.
+        FILESYSTEM_PUBLIC_URL=
+
+        # DUA BARIS BERIKUT MENENTUKAN APAKAH AKSES LEWAT IP MASIH BISA LOGIN.
+        SESSION_DOMAIN=null
+        # SESSION_SECURE_COOKIE  -> JANGAN diisi sama sekali
+
+  Lalu:  php artisan config:clear
+
+  KENAPA DUA BARIS SESI ITU PENTING
+
+    SESSION_SECURE_COOKIE=true membuat cookie hanya dikirim lewat HTTPS. Akses
+    lewat http://10.15.10.221:5566 jadi TIDAK BISA LOGIN -- dan tidak ada pesan
+    error apa pun; setiap halaman sekadar kembali ke form login. Dibiarkan
+    kosong, cookie otomatis aman saat lewat HTTPS dan tetap bekerja saat lewat
+    HTTP di jaringan kantor.
+
+    SESSION_DOMAIN yang diisi domain membuat cookie terikat ke domain itu, dan
+    tidak pernah dikirim ke alamat IP. Biarkan null.
+
+  YANG PERLU DISADARI
+
+    Gambar dilayani dari DOMAIN untuk semua orang, termasuk pengunjung dari
+    dalam kantor. Jadi kalau internet mati: halaman tetap terbuka lewat IP,
+    tapi thumbnail-nya kosong. Isinya tetap bisa dikerjakan.
+
+  KEAMANAN -- BACA INI
+
+    Tanpa baris `path`, SELURUH aplikasi terbuka ke internet: siapa pun yang
+    tahu alamat utpkpinsight.my.id sampai ke halaman login. Di dalamnya ada
+    NIM, nomor HP, dan alamat mahasiswa, dan yang menjaganya hanya kata sandi.
+
+    Pasang CLOUDFLARE ACCESS di depannya. Gratis sampai 50 pengguna, dan
+    menambah satu lapis login Cloudflare sebelum aplikasi bisa disentuh:
+
+        Cloudflare Zero Trust > Access > Applications > Add an application
+        Self-hosted, domain: utpkpinsight.my.id
+        Policy: Emails -> daftar email staf
+
+    Setelah itu orang luar tidak bisa mencapai halaman login sama sekali.
+
+  Aplikasi sudah memercayai header X-Forwarded-* dari loopback, jadi HTTPS
+  terdeteksi benar dan tautan yang dihasilkan tidak jadi http://.
+
+CATATAN
+
+    - Tunnel harus HIDUP saat jadwal terbit tiba. Kalau mati, Instagram tidak
+      bisa mengambil gambarnya dan konten ditandai gagal.
+    - trycloudflare.com (tanpa domain sendiri) bisa untuk uji coba, tapi
+      alamatnya berganti setiap kali dijalankan -- tidak cocok untuk jadwal.
+
+--------------------------------------------------------------------------------
+KALAU KOMPUTER MATI, LALU DINYALAKAN LAGI
+--------------------------------------------------------------------------------
+
+Jawaban singkat: cukup `composer run dev:lan`. Tidak ada command sinkron yang
+wajib diketik manual.
+
+Yang perlu diketahui:
+
+1. Penjadwal TIDAK mengejar ketinggalan.
+   `schedule:work` menilai "apa yang jatuh tempo menit ini", bukan "apa yang
+   terlewat kemarin". Jadi kalau komputer mati 2 hari, dua hari itu memang
+   tidak dikerjakan. Tapi tidak ada yang hilang permanen -- begitu hidup lagi:
+
+     - metrik akun     : jalan dalam 1 menit
+     - insights terbaru: jalan di jam berikutnya
+     - komentar terbaru: jalan dalam <= 5 jam
+     - backfill riwayat: menyambung dari posisi terakhir, bukan mengulang
+
+   Kalau tidak sabar menunggu, satu perintah ini menyegarkan yang penting:
+
+     php artisan accounts:sync-today
+
+2. YANG PERLU DIPERIKSA: konten terjadwal yang lewat waktu.
+   Ini satu-satunya hal yang bisa benar-benar rugi. Konten yang seharusnya
+   terbit selagi komputer mati akan terlambat. Batas amannya 24 jam
+   (config publishing.max_delay_hours). Lewat dari itu, `schedules:prune`
+   menandainya GAGAL supaya tidak tiba-tiba terbit di waktu yang salah, dan
+   harus dijadwalkan ulang manual.
+
+   Setelah mati lebih dari sehari, periksa:
+
+     php artisan schedules:prune --dry-run
+
+   Tidak mengubah apa pun, hanya menampilkan mana yang kedaluwarsa.
+
+3. Dashboard sudah memberi tahu kalau penjadwal mati.
+   Ada heartbeat tiap menit; lewat 5 menit tanpa denyut, dashboard menyebutnya.
+   Jadi tidak perlu menebak apakah `schedule:work` masih hidup.
+
+4. Ketiga proses mati bersamaan.
+   `composer run dev:lan` memakai --kill-others: kalau satu proses mati, dua
+   lainnya ikut mati. Ini disengaja (supaya tidak ada keadaan setengah jalan
+   yang menyesatkan), tapi artinya jendela itu tidak boleh ditutup. Untuk
+   komputer yang menyala 24 jam dan tidak ada yang login, pakai Task Scheduler
+   -- lihat bagian 6.
+
+5. Antrean tidak hilang saat mati.
+   Queue-nya di database (tabel `jobs`), bukan di memori. Job yang belum sempat
+   dikerjakan tetap ada dan langsung diproses begitu worker hidup lagi.
+
+--------------------------------------------------------------------------------
+SINKRON CEPAT (sama dengan tombol di /monitoring)
+--------------------------------------------------------------------------------
+
+  php artisan accounts:sync-today
+
+Ringan dan sengaja dibatasi: 2 halaman terbaru + komentar 10 postingan terbaru.
+Ini persis yang dikerjakan tombol "Sinkron" di halaman Monitoring, lewat kelas
+yang sama (App\Services\Publishing\QuickSync), supaya keduanya tidak menyimpang.
+
+Tombolnya sendiri TIDAK lagi menunggu di depan layar: sekali klik, pekerjaannya
+masuk antrean dan halaman memantau statusnya. Ini butuh worker antrean hidup --
+sudah termasuk di `composer run dev:lan`. Kalau worker tidak jalan, tombolnya
+tidak berputar selamanya; setelah ~45 detik ia menyebutkan sendiri bahwa
+antreannya tidak jalan dan menyarankan `php artisan queue:work`.
+
+--------------------------------------------------------------------------------
+KALAU POSTINGAN TIDAK MUNCUL DI /monitoring
+--------------------------------------------------------------------------------
+
+  php artisan monitoring:diagnose
+
+Read-only. Memeriksa akun nonaktif, postingan yang nyangkut di akun lama, dan
+thumbnail yang belum tersimpan, lalu menyebutkan perbaikannya.

@@ -40,9 +40,26 @@
                 <div class="h-full rounded-full bg-brand-600 transition-all duration-500"
                      :style="`width: ${data.progress}%`"></div>
             </div>
+
+            {{-- Nothing moved for a while: the queue worker is off or was
+                 killed. Offer to run it here rather than spin forever. --}}
+            <form method="POST" action="{{ route('students.import.run', $import) }}"
+                  x-show="data.stalled" x-cloak
+                  x-data="{ busy: false }" @submit="busy = true"
+                  class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
+                @csrf
+                <p class="min-w-0 flex-1 text-sm text-slate-600 dark:text-slate-300">
+                    Antrean latar belakang tidak memproses import ini (queue worker tidak berjalan).
+                    Jalankan langsung dari sini — biasanya hanya beberapa detik.
+                </p>
+                <button class="btn-primary" :disabled="busy">
+                    <x-icon name="refresh" class="h-4 w-4"/>
+                    <span x-text="busy ? 'Menjalankan…' : 'Jalankan Langsung'"></span>
+                </button>
+            </form>
         </div>
 
-        <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
             <x-stat-card label="Total baris" :value="number_format($import->total_rows)" icon="file-text" tone="slate"/>
             <x-stat-card label="Berhasil" :value="number_format($import->successCount())" icon="check-circle" tone="emerald"/>
             <x-stat-card label="Baru" :value="number_format($import->imported_count)" icon="plus" tone="brand"/>
@@ -113,6 +130,7 @@
                     data: @js([
                         'progress' => $import->progress,
                         'total' => $import->total_rows,
+                        'stalled' => $import->isStalled(),
                     ]),
 
                     start() {

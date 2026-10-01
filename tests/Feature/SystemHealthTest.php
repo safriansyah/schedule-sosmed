@@ -136,17 +136,27 @@ it('survives a cache clear', function () {
         ->and(app(SystemHealth::class)->lastRun())->not->toBeNull();
 });
 
-it('tells a developer to run the one command, and a server to use cron', function () {
-    // Anywhere that is not a production deployment, the fix is the command.
-    expect(app()->isProduction())->toBeFalse()
-        ->and(SystemHealth::howToStart())->toContain('composer run dev');
+it('names the fix that fits the machine it is running on', function () {
+    // Advice keyed on the environment alone was wrong for the deployment this
+    // actually has: a Windows box on the office network running
+    // `composer run dev:lan`, with APP_ENV=production because the app is
+    // reachable through a tunnel. That machine has no crontab, and being sent
+    // to look for one left the scheduler down while the reader searched.
+    //
+    // So the OS decides first, and the environment only afterwards.
+    expect(SystemHealth::howToStart())->toContain('composer run dev');
 
-    // On a real server it is the crontab line, verbatim.
     $was = app()->environment();
     app()->detectEnvironment(fn () => 'production');
 
     try {
-        expect(SystemHealth::howToStart())->toContain('* * * * * php artisan schedule:run');
+        if (PHP_OS_FAMILY === 'Windows') {
+            expect(SystemHealth::howToStart())
+                ->toContain('composer run dev:lan')
+                ->not->toContain('cron');
+        } else {
+            expect(SystemHealth::howToStart())->toContain('* * * * * php artisan schedule:run');
+        }
     } finally {
         app()->detectEnvironment(fn () => $was);
     }

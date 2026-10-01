@@ -11,6 +11,7 @@ use App\Support\Spreadsheet\CsvReader;
 use App\Support\Spreadsheet\XlsxReader;
 use Generator;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -40,6 +41,9 @@ class StudentImportService
 {
     /** @var array<string, int>|null Cached name => user id. */
     private ?array $officers = null;
+
+    /** @var array<string, int>|null Cached column => max length. */
+    private ?array $limits = null;
 
     public function __construct(
         private readonly StudentRowMapper $mapper,
@@ -136,13 +140,34 @@ class StudentImportService
     /** Queue (or run) the import of an already-uploaded file. */
     public function dispatch(StudentImport $import): void
     {
-        $import->forceFill(['status' => StudentImport::STATUS_PENDING, 'progress' => 0])->save();
+        // updated_at is set explicitly: it is the clock isStalled() reads, and
+        // a re-confirm of an already-pending row would otherwise not touch it.
+        $import->forceFill([
+            'status' => StudentImport::STATUS_PENDING,
+            'progress' => 0,
+            'error_message' => null,
+            'finished_at' => null,
+            'updated_at' => now(),
+        ])->save();
 
         if (config('students.queued', true)) {
             ProcessStudentImport::dispatch($import->id);
         } else {
             $this->import($import);
         }
+    }
+
+    /**
+     * Runs a stalled import inside the current request, for when the queue
+     * worker is not running. Fine for the sizes this app sees (7.000 rows take
+     * seconds); the time limit is lifted so a bigger file is not cut off.
+     */
+    public function runNow(StudentImport $import): void
+    {
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
+
+        $this->import($import);
     }
 
     /* -----------------------------------------------------------------
@@ -233,8 +258,15 @@ class StudentImportService
                 continue;
             }
 
-            $data = $result['data'];
+            $data = $this->fitToColumns($result['data']);
             $nim = $data['nim'];
+
+            if ($nim === null) {
+                $failed++;
+                $this->recordError($errors, $line, null, 'NIM terlalu panjang (maksimal '.$this->columnLimits()['nim'].' karakter)');
+
+                continue;
+            }
 
             if (isset($seen[$nim])) {
                 $duplicate++;
@@ -436,7 +468,7 @@ class StudentImportService
 
     private function store(UploadedFile $file, User $user): StudentImport
     {
-        $extension = strtolower($file->getClientOriginalExtension() ?: 'csv');
+        $extension = $this->realFormat($file);
 
         $path = $file->storeAs(
             (string) config('students.directory', 'student-imports'),
@@ -448,9 +480,97 @@ class StudentImportService
             'original_name' => $file->getClientOriginalName(),
             'path' => $path,
             'extension' => $extension,
-            'status' => StudentImport::STATUS_PENDING,
+            'status' => StudentImport::STATUS_UPLOADED,
             'created_by' => $user->id,
         ]);
+    }
+
+    /**
+     * What the file really is, judged by its first bytes rather than its name.
+     *
+     * The name lies often: an "export to Excel" from a web app is frequently
+     * a CSV or tab-separated text saved as .xls, and a real .xlsx sometimes
+     * arrives renamed. Reading by content handles both. The one format with
+     * no reader here — the old binary .xls of Excel 97-2003 (also how an
+     * Excel file with a password looks) — is refused with a fix the admin can
+     * act on, instead of failing later with a cryptic error.
+     */
+    private function realFormat(UploadedFile $file): string
+    {
+        $handle = @fopen($file->getRealPath(), 'rb');
+        $head = $handle ? (string) fread($handle, 512) : '';
+
+        if ($handle) {
+            fclose($handle);
+        }
+
+        if (str_starts_with($head, "PK\x03\x04")) {
+            return 'xlsx';
+        }
+
+        if (str_starts_with($head, "\xD0\xCF\x11\xE0")) {
+            throw new RuntimeException(
+                'Berkas ini format Excel lama (.xls 97-2003) atau dilindungi kata sandi. '
+                .'Buka di Excel, hapus kata sandinya bila ada, lalu Simpan Sebagai "Excel Workbook (.xlsx)" dan unggah ulang.'
+            );
+        }
+
+        $text = ltrim(preg_replace('/^\xEF\xBB\xBF/', '', $head) ?? $head);
+
+        if ($text === '') {
+            throw new RuntimeException('Berkas kosong.');
+        }
+
+        if (str_starts_with($text, '<') || str_contains($head, "\0")) {
+            throw new RuntimeException(
+                'Isi berkas bukan tabel yang bisa dibaca (kemungkinan halaman web atau berkas biner). '
+                .'Buka di Excel lalu Simpan Sebagai .xlsx atau .csv.'
+            );
+        }
+
+        return 'csv';
+    }
+
+    /**
+     * Cuts each value to its column's length.
+     *
+     * MySQL in strict mode rejects an over-long value outright, and one long
+     * cell would then fail the whole chunk — and with it the import. A
+     * truncated note is better than no import. The NIM is the exception: a
+     * shortened NIM is a different student, so it comes back null and the
+     * row is rejected instead.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function fitToColumns(array $data): array
+    {
+        foreach ($this->columnLimits() as $column => $limit) {
+            $value = $data[$column] ?? null;
+
+            if (! is_string($value) || mb_strlen($value) <= $limit) {
+                continue;
+            }
+
+            $data[$column] = $column === 'nim' ? null : mb_substr($value, 0, $limit);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Length of every string column on `students`, read from the schema so a
+     * later migration that widens a column is picked up without a code change.
+     *
+     * @return array<string, int>
+     */
+    private function columnLimits(): array
+    {
+        return $this->limits ??= collect(Schema::getColumns((new Student)->getTable()))
+            ->mapWithKeys(fn (array $column) => preg_match('/^(?:var)?char\((\d+)\)/i', (string) $column['type'], $m)
+                ? [$column['name'] => (int) $m[1]]
+                : [])
+            ->all();
     }
 
     private function absolutePath(StudentImport $import): string

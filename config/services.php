@@ -36,6 +36,22 @@ return [
     ],
 
     /*
+    | Instagram Graph API — how far back `accounts:sync-insights` walks.
+    |
+    | The account has ~2.200 posts. Pulling all of them costs one insights call
+    | per post, which burns the rate limit for hours and fills the database with
+    | posts nobody reports on. A window keeps each run cheap and predictable.
+    |
+    | Posts come back newest-first, so the walk simply stops at the first post
+    | older than the window instead of paging to the end of the account.
+    |
+    | 0 = no age limit (walk everything, up to the page ceiling).
+    */
+    'instagram' => [
+        'max_age_days' => (int) env('INSTAGRAM_MAX_AGE_DAYS', 90),
+    ],
+
+    /*
     | Unofficial Instagram comment viewer (dolphinradar). The official Graph
     | API only returns comment text once the app has Advanced Access, so this
     | public viewer is used as a best-effort fallback to read comments on our

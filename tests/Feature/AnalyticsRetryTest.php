@@ -1,5 +1,5 @@
 <?php
-use App\Enums\{ContentStatus, RoleName, SocialPlatform};
+use App\Enums\{ContentStatus, Permission, RoleName, SocialPlatform};
 use App\Models\{Content, Schedule, SocialAccount, User};
 use App\Services\Publishing\TokenRefresher;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -20,11 +20,27 @@ it('renders analytics with side-by-side period comparison', function () {
         ->assertSee('30 hari');
 });
 
-it('lets every role view analytics', function () {
-    foreach (RoleName::cases() as $role) {
+it('lets every role with the permission view analytics', function () {
+    // Roles that hold the permission, not every role there is. "Operator Follow
+// Up" deliberately does without the read baseline the other roles share — its
+// whole job is following up its own tickets — so iterating RoleName::cases()
+// here would assert that a restricted role is not restricted.
+    $roles = array_filter(
+        RoleName::cases(),
+        fn (RoleName $r) => User::withRole($r)->firstOrFail()->hasPermission(Permission::ViewAnalytics),
+    );
+
+    expect($roles)->not->toBeEmpty();
+
+    foreach ($roles as $role) {
         $this->actingAs(User::withRole($role)->firstOrFail())
             ->get(route('analytics.index'))->assertOk();
     }
+});
+
+it('keeps analytics away from a role without the permission', function () {
+    $this->actingAs(User::withRole(RoleName::FollowUp)->firstOrFail())
+        ->get(route('analytics.index'))->assertForbidden();
 });
 
 it('puts a failed content back into the publishing queue', function () {

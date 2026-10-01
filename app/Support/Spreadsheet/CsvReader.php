@@ -46,7 +46,7 @@ class CsvReader
                     continue;
                 }
 
-                $row = array_map(fn ($value) => trim((string) $value), $row);
+                $row = array_map(fn ($value) => trim($this->utf8((string) $value)), $row);
 
                 if ($first) {
                     // Strip the BOM so the first header does not read as
@@ -60,6 +60,16 @@ class CsvReader
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * "Save as CSV" in Windows Excel writes ANSI (Windows-1252), not UTF-8.
+     * A name like "Agustinus Sinaga’s" or "Désa" then reaches MySQL as invalid
+     * UTF-8 and the insert fails the whole import, so such cells are converted.
+     */
+    private function utf8(string $value): string
+    {
+        return mb_check_encoding($value, 'UTF-8') ? $value : mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
     }
 
     /**

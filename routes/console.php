@@ -30,13 +30,17 @@ Schedule::call(function () {
     Artisan::call('content:publish-due');
 })->everyMinute()->name('publish-due-content');
 
-// Account counters (followers / follows / posts) — one cheap API call per
-// account, so it can run every minute to keep the dashboard numbers live.
-// Snapshots are keyed per hour/day, so frequent runs just refresh the current
-// figures rather than piling up rows.
+// Account counters (followers / follows / posts).
+//
+// Every FIVE minutes, not every minute. The snapshot row is keyed to
+// startOfHour(), so a per-minute run rewrote the same row sixty times an hour
+// and spent 1.440 API calls a day to do it. Instagram allows roughly 200 calls
+// an hour in total, and the per-post insights below need that headroom far
+// more than a follower count does. Five minutes keeps the dashboard live to
+// the minute people actually notice, at a twelfth of the cost.
 Schedule::call(function () {
     Artisan::call('accounts:sync-metrics');
-})->everyMinute()->name('sync-account-metrics');
+})->everyFiveMinutes()->name('sync-account-metrics');
 
 // Per-post insights (likes / views / reach / saves) — ONE API call per post,
 // so this stays hourly to respect Instagram's rate limit (~200 calls/hour).
@@ -50,10 +54,37 @@ Schedule::call(function () {
     Artisan::call('accounts:refresh-tokens');
 })->dailyAt('02:00')->name('refresh-account-tokens');
 
-// Public comments (via the unofficial viewer) refreshed every 5 hours.
+// Public comments (via the unofficial viewer) refreshed every 5 hours. This
+// pass deliberately revisits the NEWEST posts, because that is where new
+// comments appear.
 Schedule::call(function () {
     Artisan::call('accounts:sync-comments');
 })->cron('0 */5 * * *')->name('sync-instagram-comments');
+
+/*
+| ── Backfill ────────────────────────────────────────────────────────────────
+| The two passes above only ever look at recent posts, which is right for
+| keeping the inbox current and useless for the 2.200 posts already on the
+| account. These fill in the history instead: each run continues from where
+| the last stopped, so the archive is covered over a few days without any run
+| being big enough to exhaust the API quota or hammer the comment viewer.
+|
+| Deliberately small and frequent rather than one nightly sweep — a sweep that
+| fails halfway loses its whole night, whereas these just resume.
+*/
+
+// ~100 posts every 6 hours: the full 2.200 in about six days.
+// One page is 50 posts and costs ~50 insight calls, so 2 pages sits well
+// inside Instagram's ~200 calls/hour.
+Schedule::call(function () {
+    Artisan::call('accounts:sync-insights', ['--lanjut' => true, '--halaman' => 2]);
+})->cron('20 */6 * * *')->name('backfill-instagram-insights');
+
+// 40 posts every 2 hours through the unofficial viewer. Offset from the
+// refresh pass above so the two are never in flight at the same time.
+Schedule::call(function () {
+    Artisan::call('accounts:sync-comments', ['--lanjut' => true]);
+})->cron('40 */2 * * *')->name('backfill-instagram-comments');
 
 // Grab local copies of any avatar or thumbnail we do not have yet. The syncs
 // already cache what they fetch; this catches whatever slipped through while
@@ -97,6 +128,17 @@ Schedule::call(function () {
 Schedule::call(function () {
     Artisan::call('tasks:remind');
 })->dailyAt('07:30')->name('task-reminders');
+
+// Retention. media_metrics, account_metrics and activities only ever gain
+// rows — a few hundred a day on a real account — and nothing was ever removing
+// them. Weekly and at a dead hour, because it deletes in chunks and there is
+// no reason for it to compete with anyone.
+//
+// Only derived snapshots and the audit log are touched. Posts, comments,
+// tickets, students and follow-ups are never pruned.
+Schedule::call(function () {
+    Artisan::call('data:prune', ['--force' => true]);
+})->weeklyOn(0, '03:30')->name('prune-old-snapshots');
 
 /*
 | ─────────────────────────────────────────────────────────────────────────────

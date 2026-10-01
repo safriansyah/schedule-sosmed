@@ -11,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use RuntimeException;
+use Throwable;
 
 /**
  * Upload → preview → confirm → import.
@@ -40,10 +42,24 @@ class StudentImportController extends Controller
         $this->authorize(Permission::ImportStudents->value);
 
         $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:51200'],
+            // By extension, not 'mimes': the content is sniffed by the service, and
+            // PHP's guess calls some genuine .xlsx files a plain zip and refuses them.
+            'file' => ['required', 'file', 'extensions:xlsx,xls,csv,txt', 'max:51200'],
         ], [], ['file' => 'berkas']);
 
-        $preview = $this->service->preview($request->file('file'), $request->user());
+        // A file that cannot be read is the admin's to fix, not a server
+        // error: say what is wrong on the upload form instead of a 500 page.
+        try {
+            $preview = $this->service->preview($request->file('file'), $request->user());
+        } catch (Throwable $e) {
+            report($e);
+
+            return back()->withErrors([
+                'file' => $e instanceof RuntimeException
+                    ? $e->getMessage()
+                    : 'Berkas tidak bisa dibaca. Pastikan berkas .xlsx atau .csv tidak rusak, lalu coba lagi.',
+            ]);
+        }
 
         return redirect()
             ->route('students.import.preview', $preview['import'])
@@ -77,7 +93,7 @@ class StudentImportController extends Controller
     {
         $this->authorize(Permission::ImportStudents->value);
 
-        if ($import->status === StudentImport::STATUS_PROCESSING) {
+        if ($import->status === StudentImport::STATUS_PROCESSING && ! $import->isStalled()) {
             return back()->withErrors(['import' => 'Import ini sedang berjalan.']);
         }
 
@@ -91,13 +107,40 @@ class StudentImportController extends Controller
     }
 
     /** Result page: totals, and the per-row errors. */
-    public function show(StudentImport $import): View
+    public function show(StudentImport $import): View|RedirectResponse
     {
         $this->authorize(Permission::ImportStudents->value);
+
+        // Never confirmed, so nothing is running: showing the progress card
+        // here would spin forever. Its next step is the preview.
+        if ($import->awaitingConfirmation()) {
+            return redirect()
+                ->route('students.import.preview', $import)
+                ->with('success', 'Berkas ini belum diimport. Periksa pemetaan kolom lalu klik "Import Sekarang".');
+        }
 
         return view('students.import.show', [
             'import' => $import->load('creator:id,name'),
         ]);
+    }
+
+    /**
+     * "Jalankan Langsung": the escape hatch when the queue worker is not
+     * running (or was killed mid-import), so a stuck import can still finish.
+     */
+    public function run(StudentImport $import): RedirectResponse
+    {
+        $this->authorize(Permission::ImportStudents->value);
+
+        if (! $import->isStalled()) {
+            return redirect()->route('students.import.show', $import);
+        }
+
+        $this->service->runNow($import);
+
+        return redirect()
+            ->route('students.import.show', $import)
+            ->with('success', 'Import dijalankan langsung.');
     }
 
     /** Polled by the result page while the import runs. */
@@ -114,6 +157,7 @@ class StudentImportController extends Controller
             'failed' => $import->failed_count,
             'duplicate' => $import->duplicate_count,
             'finished' => $import->isFinished(),
+            'stalled' => $import->isStalled(),
             'error' => $import->error_message,
         ]);
     }

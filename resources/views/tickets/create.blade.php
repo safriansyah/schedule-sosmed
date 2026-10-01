@@ -174,10 +174,14 @@
                         <label for="assigned_to" class="label">Operator / Agent</label>
                         <select id="assigned_to" name="assigned_to" class="input">
                             <option value="">— Belum ditugaskan —</option>
-                            @foreach ($operators as $operator)
-                                <option value="{{ $operator->id }}" @selected(old('assigned_to') == $operator->id)>
-                                    {{ $operator->name }}
-                                </option>
+                            @foreach ($operators->groupBy(fn ($u) => $u->role?->label ?? 'Lainnya') as $roleLabel => $group)
+                                <optgroup label="{{ $roleLabel }}">
+                                    @foreach ($group as $operator)
+                                        <option value="{{ $operator->id }}" @selected(old('assigned_to') == $operator->id)>
+                                            {{ $operator->name }}
+                                        </option>
+                                    @endforeach
+                                </optgroup>
                             @endforeach
                         </select>
 
