@@ -895,18 +895,119 @@ TIGA PILIHAN
      lalu unggah manual lewat aplikasi Instagram pada waktunya. Semua fungsi
      lain tetap jalan penuh.
 
-  b. BUKA AKSES MEDIA KE INTERNET
-     Pasang Cloudflare Tunnel atau ngrok yang mengarah ke komputer server, lalu
-     isi APP_URL dengan alamat publik dari tunnel itu:
-
-         APP_URL=https://sosmed-ut.trycloudflare.com
-         php artisan config:clear
-
-     Catatan: alamat itu harus tetap hidup saat jadwal terbit tiba.
+  b. BUKA AKSES MEDIA KE INTERNET LEWAT CLOUDFLARE TUNNEL
+     Lihat bagian "CLOUDFLARE TUNNEL" di bawah. Yang dibuka ke internet CUKUP
+     folder media saja -- aplikasinya tetap di jaringan lokal.
 
   c. PASANG DI HOSTING PUBLIK
      Lihat deploy-flow.txt (cPanel / Ubuntu). Ini satu-satunya cara penerbitan
      otomatis berjalan tanpa syarat tambahan.
+
+--------------------------------------------------------------------------------
+CLOUDFLARE TUNNEL (supaya konten terjadwal bisa terbit)
+--------------------------------------------------------------------------------
+
+TUJUANNYA APA
+
+Instagram harus bisa MENGUNDUH file gambar dari internet. Hanya itu. Aplikasi
+ini sendiri tidak perlu dibuka ke internet -- dan sebaiknya memang tidak, karena
+di dalamnya ada data mahasiswa.
+
+Jadi yang dibuka hanya satu alamat untuk folder media:
+
+    https://media.domain-anda.ac.id/storage/...   -> dibuka ke internet
+    http://10.15.10.221:5566                      -> tetap di jaringan kantor
+
+Aplikasi sudah disiapkan untuk pemisahan ini. Dua pengaturan .env:
+
+    FILESYSTEM_PUBLIC_URL   alamat publik untuk media (dipakai Instagram)
+    APP_URL                 alamat aplikasi (biarkan alamat lokal)
+
+LANGKAH
+
+ 1. Pasang cloudflared di komputer server
+
+        winget install --id Cloudflare.cloudflared
+
+ 2. Login dan buat tunnel (sekali saja)
+
+        cloudflared tunnel login
+        cloudflared tunnel create sosmed-ut
+
+    Catat Tunnel ID yang muncul.
+
+ 3. Arahkan subdomain ke tunnel
+
+        cloudflared tunnel route dns sosmed-ut media.domain-anda.ac.id
+
+    Domainnya harus sudah dikelola Cloudflare (nameserver-nya mengarah ke
+    Cloudflare).
+
+ 4. Buat file konfigurasi
+
+    C:\Users\<user>\.cloudflared\config.yml
+
+        tunnel: sosmed-ut
+        credentials-file: C:\Users\<user>\.cloudflared\<TunnelID>.json
+
+        ingress:
+          # HANYA folder media yang dilayani.
+          - hostname: media.domain-anda.ac.id
+            path: ^/storage/.*
+            service: http://127.0.0.1:5566
+          # Sisanya ditolak -- halaman aplikasi tidak ikut terbuka.
+          - service: http_status:404
+
+    Aturan `path` itu yang menjaga data mahasiswa tetap di dalam. Tanpa baris
+    itu, SELURUH aplikasi ikut terbuka ke internet.
+
+ 5. Isi .env di komputer server
+
+        FILESYSTEM_PUBLIC_URL=https://media.domain-anda.ac.id/storage
+
+    APP_URL JANGAN diubah -- biarkan alamat lokal.
+
+        php artisan config:clear
+
+ 6. Jalankan tunnel sebagai layanan Windows (supaya hidup terus)
+
+        cloudflared service install
+        Start-Service cloudflared
+
+ 7. Periksa
+
+        php artisan content:check-publish
+
+    Harus berbunyi "SIAP -- konten terjadwal bisa terbit otomatis".
+
+    Lalu uji dari luar jaringan kantor (pakai data HP, matikan WiFi):
+
+        https://media.domain-anda.ac.id/storage/  -- gambar harus terbuka
+        https://media.domain-anda.ac.id/dashboard -- HARUS 404
+
+    Baris kedua itu pemeriksaan keamanannya. Kalau dashboard-nya terbuka,
+    aturan `path` di config.yml belum benar.
+
+KALAU APLIKASINYA MEMANG MAU DIBUKA SEKALIAN
+
+Hanya kalau memang diinginkan, dan pikirkan dulu: di dalamnya ada NIM, nomor
+HP, dan alamat mahasiswa. Kalau tetap dilakukan:
+
+    - hapus baris `path:` di ingress
+    - APP_URL=https://alamat-tunnel-anda
+    - APP_ENV=production dan APP_DEBUG=false   (WAJIB)
+    - SESSION_SECURE_COOKIE=true
+    - pasang Cloudflare Access supaya tetap perlu login Cloudflare
+
+Aplikasi sudah memercayai header X-Forwarded-* dari loopback, jadi HTTPS
+terdeteksi benar dan tautan yang dihasilkan tidak jadi http://.
+
+CATATAN
+
+    - Tunnel harus HIDUP saat jadwal terbit tiba. Kalau mati, Instagram tidak
+      bisa mengambil gambarnya dan konten ditandai gagal.
+    - trycloudflare.com (tanpa domain sendiri) bisa untuk uji coba, tapi
+      alamatnya berganti setiap kali dijalankan -- tidak cocok untuk jadwal.
 
 --------------------------------------------------------------------------------
 KALAU KOMPUTER MATI, LALU DINYALAKAN LAGI

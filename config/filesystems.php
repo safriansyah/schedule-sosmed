@@ -40,7 +40,18 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => env('APP_URL').'/storage',
+            // Separate from APP_URL on purpose.
+            //
+            // Instagram does not receive the image file — it receives this URL
+            // and its own servers fetch it, so it must be reachable from the
+            // internet. On an intranet deployment APP_URL is a private address
+            // and never can be.
+            //
+            // Splitting them means a tunnel can expose ONLY /storage on a public
+            // hostname while the application itself stays on the office network.
+            // Leave FILESYSTEM_PUBLIC_URL empty and it falls back to APP_URL,
+            // which is right for a normal public deployment.
+            'url' => env('FILESYSTEM_PUBLIC_URL') ?: env('APP_URL').'/storage',
             'visibility' => 'public',
             'throw' => false,
         ],
