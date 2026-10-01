@@ -988,19 +988,71 @@ LANGKAH
     Baris kedua itu pemeriksaan keamanannya. Kalau dashboard-nya terbuka,
     aturan `path` di config.yml belum benar.
 
-KALAU APLIKASINYA MEMANG MAU DIBUKA SEKALIAN
+PILIHAN B: SELURUH APLIKASI LEWAT DOMAIN (bisa domain DAN IP sekaligus)
 
-Hanya kalau memang diinginkan, dan pikirkan dulu: di dalamnya ada NIM, nomor
-HP, dan alamat mahasiswa. Kalau tetap dilakukan:
+Ini yang dipakai kalau ingin lepas dari alamat IP: staf membuka domain, dan
+alamat IP tetap bisa dipakai di dalam kantor. Keduanya melayani dari satu
+pemasangan yang sama.
 
-    - hapus baris `path:` di ingress
-    - APP_URL=https://alamat-tunnel-anda
-    - APP_ENV=production dan APP_DEBUG=false   (WAJIB)
-    - SESSION_SECURE_COOKIE=true
-    - pasang Cloudflare Access supaya tetap perlu login Cloudflare
+    https://utpkpinsight.my.id        dari mana saja
+    http://10.15.10.221:5566          di dalam kantor
 
-Aplikasi sudah memercayai header X-Forwarded-* dari loopback, jadi HTTPS
-terdeteksi benar dan tautan yang dihasilkan tidak jadi http://.
+  config.yml -- tanpa baris `path`, jadi seluruh aplikasi dilayani:
+
+        ingress:
+          - hostname: utpkpinsight.my.id
+            service: http://127.0.0.1:5566
+          - service: http_status:404
+
+  .env di komputer server:
+
+        APP_ENV=production
+        APP_DEBUG=false
+        APP_URL=https://utpkpinsight.my.id
+
+        # Kosongkan: media ikut APP_URL, dan APP_URL sudah publik.
+        FILESYSTEM_PUBLIC_URL=
+
+        # DUA BARIS BERIKUT MENENTUKAN APAKAH AKSES LEWAT IP MASIH BISA LOGIN.
+        SESSION_DOMAIN=null
+        # SESSION_SECURE_COOKIE  -> JANGAN diisi sama sekali
+
+  Lalu:  php artisan config:clear
+
+  KENAPA DUA BARIS SESI ITU PENTING
+
+    SESSION_SECURE_COOKIE=true membuat cookie hanya dikirim lewat HTTPS. Akses
+    lewat http://10.15.10.221:5566 jadi TIDAK BISA LOGIN -- dan tidak ada pesan
+    error apa pun; setiap halaman sekadar kembali ke form login. Dibiarkan
+    kosong, cookie otomatis aman saat lewat HTTPS dan tetap bekerja saat lewat
+    HTTP di jaringan kantor.
+
+    SESSION_DOMAIN yang diisi domain membuat cookie terikat ke domain itu, dan
+    tidak pernah dikirim ke alamat IP. Biarkan null.
+
+  YANG PERLU DISADARI
+
+    Gambar dilayani dari DOMAIN untuk semua orang, termasuk pengunjung dari
+    dalam kantor. Jadi kalau internet mati: halaman tetap terbuka lewat IP,
+    tapi thumbnail-nya kosong. Isinya tetap bisa dikerjakan.
+
+  KEAMANAN -- BACA INI
+
+    Tanpa baris `path`, SELURUH aplikasi terbuka ke internet: siapa pun yang
+    tahu alamat utpkpinsight.my.id sampai ke halaman login. Di dalamnya ada
+    NIM, nomor HP, dan alamat mahasiswa, dan yang menjaganya hanya kata sandi.
+
+    Pasang CLOUDFLARE ACCESS di depannya. Gratis sampai 50 pengguna, dan
+    menambah satu lapis login Cloudflare sebelum aplikasi bisa disentuh:
+
+        Cloudflare Zero Trust > Access > Applications > Add an application
+        Self-hosted, domain: utpkpinsight.my.id
+        Policy: Emails -> daftar email staf
+
+    Setelah itu orang luar tidak bisa mencapai halaman login sama sekali.
+
+  Aplikasi sudah memercayai header X-Forwarded-* dari loopback, jadi HTTPS
+  terdeteksi benar dan tautan yang dihasilkan tidak jadi http://.
 
 CATATAN
 

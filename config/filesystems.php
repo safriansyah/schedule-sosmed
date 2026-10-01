@@ -51,7 +51,13 @@ return [
             // hostname while the application itself stays on the office network.
             // Leave FILESYSTEM_PUBLIC_URL empty and it falls back to APP_URL,
             // which is right for a normal public deployment.
-            'url' => env('FILESYSTEM_PUBLIC_URL') ?: env('APP_URL').'/storage',
+            //
+            // rtrim on both: APP_URL written as "https://example.id/" is a
+            // perfectly reasonable thing to type, and concatenating it produced
+            // "https://example.id//storage/foto.jpg". A browser forgives the
+            // double slash; a server-side fetcher asking for that exact path
+            // does not have to, and Instagram's is the one that matters here.
+            'url' => rtrim(env('FILESYSTEM_PUBLIC_URL') ?: rtrim((string) env('APP_URL'), '/').'/storage', '/'),
             'visibility' => 'public',
             'throw' => false,
         ],

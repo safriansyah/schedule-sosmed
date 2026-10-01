@@ -81,3 +81,33 @@ it('ignores forwarded headers from somewhere that is not the tunnel', function (
 
     expect(request()->getHost())->not->toBe('jahat.example.com');
 });
+
+it('tolerates a trailing slash in either url setting', function () {
+    // "https://utpkpinsight.my.id/" is a perfectly normal thing to type into
+    // .env, and concatenating it gave "https://utpkpinsight.my.id//storage/x.jpg".
+    // A browser forgives the double slash; the server-side fetcher that matters
+    // here -- Instagram's -- does not have to.
+    $cases = [
+        ['https://utpkpinsight.my.id/', null],
+        ['https://utpkpinsight.my.id', null],
+        ['http://10.15.10.221:5566', 'https://media.utpkpinsight.my.id/storage/'],
+        ['http://10.15.10.221:5566', 'https://media.utpkpinsight.my.id/storage'],
+    ];
+
+    foreach ($cases as [$appUrl, $mediaUrl]) {
+        config([
+            'app.url' => $appUrl,
+            'filesystems.disks.public.url' => rtrim(
+                $mediaUrl ?: rtrim($appUrl, '/').'/storage',
+                '/',
+            ),
+        ]);
+
+        Storage::forgetDisk('public');
+
+        $url = Storage::disk('public')->url('media/foto.jpg');
+
+        expect($url)->not->toContain('//storage');
+        expect($url)->toEndWith('/storage/media/foto.jpg');
+    }
+});
