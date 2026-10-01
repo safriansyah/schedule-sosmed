@@ -59,7 +59,7 @@
                         @if ($user->is_active)
                             <span class="badge-green shrink-0">Aktif</span>
                         @else
-                            <span class="badge-red shrink-0">Nonaktif</span>
+                            <span class="badge-red shrink-0"><x-icon name="ban" class="h-3 w-3"/> Disable</span>
                         @endif
                     </div>
 
@@ -82,6 +82,15 @@
                                 </a>
 
                                 @unless ($user->is(auth()->user()))
+                                    <form method="POST" action="{{ route('users.toggle-active', $user) }}"
+                                          onsubmit="return confirm('{{ $user->is_active ? 'Disable' : 'Aktifkan kembali' }} akun {{ $user->name }}?')">
+                                        @csrf
+                                        <button class="{{ $user->is_active ? 'btn-outline' : 'btn-success' }} btn-sm" title="{{ $user->is_active ? 'Disable — tidak bisa login' : 'Aktifkan kembali' }}">
+                                            <x-icon :name="$user->is_active ? 'ban' : 'check'" class="h-3.5 w-3.5"/>
+                                            <span class="hidden lg:inline">{{ $user->is_active ? 'Disable' : 'Aktifkan' }}</span>
+                                        </button>
+                                    </form>
+
                                     <form method="POST" action="{{ route('users.destroy', $user) }}"
                                           onsubmit="return confirm('Hapus pengguna {{ $user->name }}?')">
                                         @csrf
@@ -132,7 +141,7 @@
                                     @if ($user->is_active)
                                         <span class="badge-green">Aktif</span>
                                     @else
-                                        <span class="badge-red">Nonaktif</span>
+                                        <span class="badge-red"><x-icon name="ban" class="h-3 w-3"/> Disable</span>
                                     @endif
                                 </td>
 
@@ -148,6 +157,15 @@
                                             </a>
 
                                             @unless ($user->is(auth()->user()))
+                                                <form method="POST" action="{{ route('users.toggle-active', $user) }}"
+                                                      onsubmit="return confirm('{{ $user->is_active ? 'Disable' : 'Aktifkan kembali' }} akun {{ $user->name }}?')">
+                                                    @csrf
+                                                    <button class="{{ $user->is_active ? 'btn-outline' : 'btn-success' }} btn-sm" title="{{ $user->is_active ? 'Disable — tidak bisa login' : 'Aktifkan kembali' }}">
+                                                        <x-icon :name="$user->is_active ? 'ban' : 'check'" class="h-3.5 w-3.5"/>
+                                                        <span class="hidden lg:inline">{{ $user->is_active ? 'Disable' : 'Aktifkan' }}</span>
+                                                    </button>
+                                                </form>
+
                                                 <form method="POST" action="{{ route('users.destroy', $user) }}"
                                                       onsubmit="return confirm('Hapus pengguna {{ $user->name }}?')">
                                                     @csrf

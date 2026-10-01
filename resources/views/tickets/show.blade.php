@@ -102,31 +102,38 @@
                 </div>
             @endif
 
-            {{-- Ticket information, editable --}}
+            {{-- Ticket information. Read-only to whoever lacks EditTickets
+                 (Operator Follow Up): they work the case, they do not rewrite it. --}}
+            @php $canEditInfo = ! $ticket->isClosed() && auth()->user()->can(\App\Enums\Permission::EditTickets->value); @endphp
             <form method="POST" action="{{ route('tickets.update', $ticket) }}" class="card p-5">
                 @csrf
                 @method('PUT')
 
-                <h2 class="mb-4 text-base font-bold text-slate-800 dark:text-white">Informasi Tiket</h2>
+                <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-slate-800 dark:text-white">
+                    Informasi Tiket
+                    @if (! $canEditInfo && ! $ticket->isClosed())
+                        <span class="badge-slate text-[11px] font-medium"><x-icon name="eye" class="h-3 w-3"/> Hanya lihat</span>
+                    @endif
+                </h2>
 
                 <div class="space-y-4">
                     <div>
                         <label for="subject" class="label">Judul</label>
                         <input id="subject" name="subject" value="{{ old('subject', $ticket->subject) }}" class="input"
-                               @disabled($ticket->isClosed())>
+                               @disabled(! $canEditInfo)>
                         @error('subject') <p class="form-error">{{ $message }}</p> @enderror
                     </div>
 
                     <div>
                         <label for="description" class="label">Deskripsi</label>
                         <textarea id="description" name="description" rows="4" class="input"
-                                  @disabled($ticket->isClosed())>{{ old('description', $ticket->description) }}</textarea>
+                                  @disabled(! $canEditInfo)>{{ old('description', $ticket->description) }}</textarea>
                     </div>
 
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <label for="category_id" class="label">Kategori</label>
-                            <select id="category_id" name="category_id" class="input" @disabled($ticket->isClosed())>
+                            <select id="category_id" name="category_id" class="input" @disabled(! $canEditInfo)>
                                 <option value="">— Tanpa kategori —</option>
                                 @foreach ($categories as $category)
                                     <option value="{{ $category->id }}" @selected($ticket->category_id === $category->id)>
@@ -138,7 +145,7 @@
 
                         <div>
                             <label for="sub_category_id" class="label">Sub Kategori</label>
-                            <select id="sub_category_id" name="sub_category_id" class="input" @disabled($ticket->isClosed())>
+                            <select id="sub_category_id" name="sub_category_id" class="input" @disabled(! $canEditInfo)>
                                 <option value="">— Tanpa sub kategori —</option>
                                 @foreach ($categories as $category)
                                     <optgroup label="{{ $category->name }}">
@@ -154,7 +161,7 @@
 
                         <div>
                             <label for="priority" class="label">Prioritas</label>
-                            <select id="priority" name="priority" class="input" @disabled($ticket->isClosed())>
+                            <select id="priority" name="priority" class="input" @disabled(! $canEditInfo)>
                                 @foreach ($priorities as $value => $label)
                                     <option value="{{ $value }}" @selected($ticket->priority->value === $value)>{{ $label }}</option>
                                 @endforeach
@@ -165,7 +172,7 @@
                             <label for="due_at" class="label">Target selesai</label>
                             <input id="due_at" name="due_at" type="date" class="input"
                                    value="{{ old('due_at', $ticket->due_at?->format('Y-m-d')) }}"
-                                   @disabled($ticket->isClosed())>
+                                   @disabled(! $canEditInfo)>
                         </div>
                     </div>
 
@@ -173,33 +180,33 @@
                         <div>
                             <label for="requester_name" class="label">Nama</label>
                             <input id="requester_name" name="requester_name" class="input"
-                                   value="{{ old('requester_name', $ticket->requester_name) }}" @disabled($ticket->isClosed())>
+                                   value="{{ old('requester_name', $ticket->requester_name) }}" @disabled(! $canEditInfo)>
                         </div>
                         <div>
                             <label for="requester_nim" class="label">NIM</label>
                             <input id="requester_nim" name="requester_nim" class="input"
-                                   value="{{ old('requester_nim', $ticket->requester_nim) }}" @disabled($ticket->isClosed())>
+                                   value="{{ old('requester_nim', $ticket->requester_nim) }}" @disabled(! $canEditInfo)>
                         </div>
                         <div>
                             <label for="requester_nac" class="label">NAC</label>
                             <input id="requester_nac" name="requester_nac" class="input"
-                                   value="{{ old('requester_nac', $ticket->requester_nac) }}" @disabled($ticket->isClosed())>
+                                   value="{{ old('requester_nac', $ticket->requester_nac) }}" @disabled(! $canEditInfo)>
                         </div>
                         <div>
                             <label for="requester_phone" class="label">Nomor HP</label>
                             <input id="requester_phone" name="requester_phone" class="input"
-                                   value="{{ old('requester_phone', $ticket->requester_phone) }}" @disabled($ticket->isClosed())>
+                                   value="{{ old('requester_phone', $ticket->requester_phone) }}" @disabled(! $canEditInfo)>
                         </div>
                         <div class="sm:col-span-2">
                             <label for="requester_email" class="label">Email</label>
                             <input id="requester_email" name="requester_email" type="email" class="input"
-                                   value="{{ old('requester_email', $ticket->requester_email) }}" @disabled($ticket->isClosed())>
+                                   value="{{ old('requester_email', $ticket->requester_email) }}" @disabled(! $canEditInfo)>
                         </div>
                     </div>
                 </div>
 
                 @if ($ticket->isEditable())
-                    @can(\App\Enums\Permission::HandleTickets->value)
+                    @can(\App\Enums\Permission::EditTickets->value)
                         <div class="mt-4 flex justify-end">
                             <button class="btn-primary"><x-icon name="check" class="h-4 w-4"/> Simpan</button>
                         </div>
@@ -726,7 +733,7 @@
             @endcan
 
             @if ($ticket->isEditable())
-                @can(\App\Enums\Permission::HandleTickets->value)
+                @can(\App\Enums\Permission::EditTickets->value)
                     <form method="POST" action="{{ route('tickets.status', $ticket) }}" class="card p-5">
                         @csrf
                         <h2 class="mb-4 text-base font-bold text-slate-800 dark:text-white">Ubah Status</h2>
@@ -764,7 +771,7 @@
                 @endcan
             @endif
 
-            @can(\App\Enums\Permission::HandleTickets->value)
+            @can(\App\Enums\Permission::EditTickets->value)
                 <form method="POST" action="{{ route('tickets.flag', $ticket) }}" class="card p-5">
                     @csrf
                     <h2 class="mb-1 text-base font-bold text-slate-800 dark:text-white">Flag</h2>

@@ -219,7 +219,7 @@ class TicketController extends Controller
 
     public function update(Request $request, Ticket $ticket): RedirectResponse
     {
-        $this->authorize(Permission::HandleTickets->value);
+        $this->authorize(Permission::EditTickets->value);
         $this->guardVisibility($request->user(), $ticket);
 
         $data = $request->validate([
@@ -371,7 +371,7 @@ class TicketController extends Controller
     /** Netral ⇄ Lead. */
     public function flag(Request $request, Ticket $ticket): RedirectResponse
     {
-        $this->authorize(Permission::HandleTickets->value);
+        $this->authorize(Permission::EditTickets->value);
         $this->guardVisibility($request->user(), $ticket);
 
         $data = $request->validate(['flag' => ['required', 'string', 'max:16']]);
@@ -389,7 +389,7 @@ class TicketController extends Controller
 
     public function status(Request $request, Ticket $ticket): RedirectResponse
     {
-        $this->authorize(Permission::HandleTickets->value);
+        $this->authorize(Permission::EditTickets->value);
         $this->guardVisibility($request->user(), $ticket);
 
         $data = $request->validate([

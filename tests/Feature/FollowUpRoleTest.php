@@ -109,12 +109,11 @@ it('cannot close a ticket, even through the follow up form', function () {
         ->post(route('tickets.close', $ticket), ['resolution_note' => 'Sudah selesai semua.'])
         ->assertForbidden();
 
-    // The status route is reachable (it is HandleTickets), but it refuses to
-    // close: closing must record a resolution, so it is pushed to the route
-    // above rather than allowed as a plain status change.
+    // The status route is EditTickets, which this role does not have, so it
+    // is refused outright — closing or otherwise.
     $this->actingAs($user)
         ->post(route('tickets.status', $ticket), ['status' => TicketStatus::Closed->value])
-        ->assertSessionHasErrors('status');
+        ->assertForbidden();
 
     // And the follow-up form's own vocabulary cannot reach a closed state:
     // anything outside new/assigned/on_proses falls back to "on proses".
@@ -146,5 +145,40 @@ it('is kept out of the rest of the app', function () {
     // business in, so a future permission slip shows up here.
     foreach (['/students', '/interactions', '/contacts', '/monitoring', '/reports/tickets', '/users'] as $uri) {
         $this->actingAs($user)->get($uri)->assertForbidden();
+    }
+});
+
+it('sees the ticket information read-only, without the status, flag or assignment forms', function () {
+    $user = followUpUser();
+    $ticket = ticketFor($user);
+
+    $html = $this->actingAs($user)->get(route('tickets.show', $ticket))->assertOk()->getContent();
+
+    expect($html)
+        ->toContain('Hanya lihat')
+        ->toContain('Tambah Follow Up')
+        ->not->toContain(route('tickets.status', $ticket))
+        ->not->toContain(route('tickets.flag', $ticket))
+        ->not->toContain(route('tickets.assign', $ticket))
+        ->and(preg_match('/id="subject"[^>]*disabled/', $html))->toBe(1);
+});
+
+it('is refused when it edits the ticket, its status or its flag directly', function () {
+    $user = followUpUser();
+    $ticket = ticketFor($user);
+
+    $this->actingAs($user)->put(route('tickets.update', $ticket), [
+        'subject' => 'Diubah follow up', 'priority' => 'normal',
+    ])->assertForbidden();
+    $this->actingAs($user)->post(route('tickets.status', $ticket), ['status' => 'on_proses'])->assertForbidden();
+    $this->actingAs($user)->post(route('tickets.flag', $ticket), ['flag' => \App\Enums\TicketFlag::cases()[0]->value])->assertForbidden();
+
+    expect($ticket->refresh()->subject)->toBe('Tiket uji follow up');
+});
+
+it('leaves editing to the roles that handle tickets in full', function () {
+    foreach ([RoleName::Manager, RoleName::Pic, RoleName::Operator] as $role) {
+        expect(User::withRole($role)->firstOrFail()->hasPermission(Permission::EditTickets))
+            ->toBeTrue("{$role->value} harus tetap bisa mengubah tiket");
     }
 });

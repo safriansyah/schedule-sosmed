@@ -50,13 +50,38 @@
         </div>
         @error('role_id') <p class="form-error">{{ $message }}</p> @enderror
 
-        <label class="mt-4 flex cursor-pointer items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $user?->is_active ?? true))
-                   class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40 dark:border-white/20 dark:bg-ink-850">
-            Akun aktif — bisa login
-        </label>
-        @if ($user && $user->is(auth()->user()))
-            <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">Anda tidak dapat menonaktifkan akun sendiri.</p>
+        {{-- Status pengguna. Disable keeps the account, its history and its
+             assignments, but it cannot log in, and an open session is signed
+             out on its next request. --}}
+        @php
+            $active = (bool) old('is_active', $user?->is_active ?? true);
+            $self = $user && $user->is(auth()->user());
+        @endphp
+
+        <p class="label mt-5">Status pengguna</p>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 transition has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-500/[0.06] dark:border-white/10">
+                <input type="radio" name="is_active" value="1" @checked($active) class="mt-0.5 text-emerald-600 focus:ring-emerald-500/40">
+                <span>
+                    <span class="flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        <x-icon name="check-circle" class="h-4 w-4 text-emerald-500"/> Aktif
+                    </span>
+                    <span class="mt-0.5 block text-xs text-slate-400">Bisa login dan bekerja seperti biasa.</span>
+                </span>
+            </label>
+
+            <label class="flex items-start gap-3 rounded-xl border border-slate-200 p-3 transition has-[:checked]:border-rose-500 has-[:checked]:bg-rose-500/[0.06] dark:border-white/10 {{ $self ? 'cursor-not-allowed opacity-50' : 'cursor-pointer' }}">
+                <input type="radio" name="is_active" value="0" @checked(! $active) @disabled($self) class="mt-0.5 text-rose-600 focus:ring-rose-500/40">
+                <span>
+                    <span class="flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        <x-icon name="ban" class="h-4 w-4 text-rose-500"/> Disable
+                    </span>
+                    <span class="mt-0.5 block text-xs text-slate-400">Akun tetap ada, tapi tidak bisa login sama sekali.</span>
+                </span>
+            </label>
+        </div>
+        @if ($self)
+            <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">Anda tidak dapat men-disable akun sendiri.</p>
         @endif
     </div>
 

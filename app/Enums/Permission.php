@@ -62,7 +62,8 @@ enum Permission: string
     case ViewTickets = 'ticket.view';
     case ViewAllTickets = 'ticket.viewAll';       // lihat tiket operator lain
     case CreateTickets = 'ticket.create';
-    case HandleTickets = 'ticket.handle';         // follow up, ubah status
+    case HandleTickets = 'ticket.handle';         // follow up, data mahasiswa
+    case EditTickets = 'ticket.edit';             // informasi, status, flag
     case AssignTickets = 'ticket.assign';
     case CloseTickets = 'ticket.close';
     case ManageTicketCategories = 'ticket.category';
@@ -121,7 +122,8 @@ enum Permission: string
             self::ViewTickets => 'Lihat tiket',
             self::ViewAllTickets => 'Lihat tiket seluruh operator',
             self::CreateTickets => 'Buat tiket',
-            self::HandleTickets => 'Tangani tiket (follow up & ubah status)',
+            self::HandleTickets => 'Tangani tiket (follow up & data mahasiswa)',
+            self::EditTickets => 'Ubah informasi, status & flag tiket',
             self::AssignTickets => 'Tugaskan tiket ke operator',
             self::CloseTickets => 'Tutup tiket',
             self::ManageTicketCategories => 'Kelola kategori tiket',

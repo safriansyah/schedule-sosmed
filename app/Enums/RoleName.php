@@ -177,6 +177,7 @@ enum RoleName: string
                 Permission::ViewAllTickets,
                 Permission::CreateTickets,
                 Permission::HandleTickets,
+                Permission::EditTickets,
                 Permission::AssignTickets,
                 Permission::CloseTickets,
                 Permission::ManageTicketCategories,
@@ -200,6 +201,7 @@ enum RoleName: string
                 Permission::ViewTickets,
                 Permission::CreateTickets,
                 Permission::HandleTickets,
+                Permission::EditTickets,
                 // Whoever works a ticket finishes it. Closing demands a
                 // resolution note and is the natural end of the follow-up the
                 // handler is already doing, so withholding it left a PIC able
@@ -227,6 +229,9 @@ enum RoleName: string
              |   no AssignTickets   -> they cannot hand work to anyone else
              |   no CloseTickets    -> closing demands a resolution and stays
              |                         with PIC/Operator/Manager
+             |   no EditTickets     -> the ticket's information, status and flag
+             |                         are read-only to them; they add follow-ups
+             |                         and student data, nothing more
              |
              | HandleTickets on its own cannot close a ticket: a follow-up may
              | only set the short vocabulary (new / assigned / on_proses), all of
@@ -258,6 +263,7 @@ enum RoleName: string
                 Permission::ViewTickets,
                 Permission::CreateTickets,
                 Permission::HandleTickets,
+                Permission::EditTickets,
                 Permission::CloseTickets,
                 Permission::ViewTasks,
                 Permission::ExportData,

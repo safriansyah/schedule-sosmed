@@ -150,6 +150,7 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/password', [SettingsController::class, 'updatePassword'])->name('settings.password');
 
     // User management
+    Route::post('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
     Route::resource('users', UserController::class)->except('show');
 
     // Connected social accounts (credentials live here, encrypted)

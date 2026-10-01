@@ -99,6 +99,38 @@ class UserController extends Controller
             ->with('toast', ['message' => 'Pengguna diperbarui.', 'type' => 'success']);
     }
 
+    /**
+     * Disable / re-enable an account in one click. A disabled account keeps
+     * its history and assignments but cannot log in, and one that is logged
+     * in right now is signed out on its next request (EnsureUserIsActive).
+     */
+    public function toggleActive(Request $request, User $user): RedirectResponse
+    {
+        $this->authorize(Permission::ManageUsers->value);
+
+        if ($user->is($request->user())) {
+            return back()->with('toast', [
+                'message' => 'Anda tidak dapat men-disable akun sendiri.',
+                'type' => 'error',
+            ]);
+        }
+
+        $user->forceFill(['is_active' => ! $user->is_active])->save();
+
+        $this->log->log(
+            $user->is_active ? 'user.enabled' : 'user.disabled',
+            $user->is_active ? "Pengguna {$user->name} diaktifkan kembali" : "Pengguna {$user->name} di-disable",
+            $user,
+        );
+
+        return back()->with('toast', [
+            'message' => $user->is_active
+                ? "{$user->name} aktif kembali dan bisa login."
+                : "{$user->name} di-disable — tidak bisa login lagi.",
+            'type' => 'success',
+        ]);
+    }
+
     public function destroy(Request $request, User $user): RedirectResponse
     {
         $this->authorize(Permission::ManageUsers->value);
