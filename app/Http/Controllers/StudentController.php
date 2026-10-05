@@ -95,33 +95,34 @@ class StudentController extends Controller
         $this->authorize(Permission::AssignStudents->value);
 
         $user = $request->user();
-        $filters = $this->filters($request) + ['assignment' => AssignmentStatus::Unassigned->value];
-        $filters['assignment'] = AssignmentStatus::Unassigned->value;
+        $filters = $this->filters($request);
+        unset($filters['assignment']);
 
+        // Students on this filter with NO ticket yet — what "Buat Ticket per
+        // Wilayah" would act on. Whether a student was "assigned" before no
+        // longer matters: a ticket goes straight to an operator.
         $students = Student::query()
             ->filtered($filters)
-            ->unassigned()
-            // So each row can say whether a ticket already exists for it —
-            // otherwise "Generate Ticket" is a number with no detail behind it.
-            ->withCount('tickets')
+            ->whereDoesntHave('tickets')
+            ->with('assignee:id,name')
             ->orderByDesc('id')
             ->paginate($this->perPage($request, 50))
             ->withQueryString();
 
         // The count the buttons act on — read off the paginator rather than
-        // counted again. It is the identical query, and running it twice cost
-        // 27 ms of the page's 89 ms of database time for no new information.
+        // counted again.
         $matching = $students->total();
 
-        // Who already holds students in the chosen region, and how many — what
-        // "Pindah Operator" offers as the source, so the admin moves from a
-        // name that actually has something there.
+        // Who holds open tickets in the chosen region, and how many — what
+        // "Pindah Ticket" offers as the source, so the admin moves from a name
+        // that actually has something there.
         $region = array_filter(Arr::only($filters, StudentStats::REGION_LEVELS), fn ($v) => filled($v));
         $regionHolders = $region === []
             ? collect()
-            : Student::query()
-                ->filtered($region)
+            : \App\Models\Ticket::query()
+                ->open()
                 ->whereNotNull('assigned_to')
+                ->whereIn('student_id', Student::query()->filtered($region)->select('id'))
                 ->selectRaw('assigned_to, COUNT(*) AS total')
                 ->groupBy('assigned_to')
                 ->pluck('total', 'assigned_to');
@@ -340,7 +341,9 @@ class StudentController extends Controller
      */
     private function guardVisibility(User $user, Student $student): void
     {
-        if (! $user->hasPermission(Permission::ViewAllStudents) && $student->assigned_to !== $user->id) {
+        // Same rule as Student::scopeVisibleTo(): theirs by assignment, or by a
+        // ticket of that student handed to them.
+        if (! Student::query()->visibleTo($user)->whereKey($student->getKey())->exists()) {
             abort(403, 'Mahasiswa ini bukan tanggung jawab Anda.');
         }
     }

@@ -105,7 +105,17 @@ class Student extends Model
             return $query;
         }
 
-        return $query->where('assigned_to', $user->id);
+        // Theirs if the student was handed to them, OR if a ticket for the
+        // student was: tickets are raised per region straight to an operator
+        // now, without assigning the student first, and the operator working
+        // that ticket must be able to look the student up.
+        return $query->where(fn (Builder $q) => $q
+            ->where('assigned_to', $user->id)
+            ->orWhereExists(fn ($t) => $t->selectRaw('1')
+                ->from('tickets')
+                ->whereColumn('tickets.student_id', 'students.id')
+                ->where('tickets.assigned_to', $user->id)
+                ->whereNull('tickets.deleted_at')));
     }
 
     public function scopeSearch(Builder $query, ?string $term): Builder

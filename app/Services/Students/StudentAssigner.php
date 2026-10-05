@@ -141,12 +141,15 @@ class StudentAssigner
     }
 
     /**
-     * "Pindah Operator": everything one operator holds in a region goes to
-     * another — the fix for a region handed to the wrong person.
+     * "Pindah Ticket": one operator's open tickets for students in a region go
+     * to another operator — the fix for a region given to the wrong person.
      *
-     * Students and their OPEN tickets move together; closed tickets stay with
-     * whoever closed them, since that work is done. Each ticket's assignment
-     * history records the move.
+     * Ticket-based: tickets are raised per region straight to an operator,
+     * without assigning the student, so "what Vina holds in Kab. Bangka" is
+     * her open tickets there. Students that were assigned to her in that
+     * region the old way move along too, so nothing of hers is left behind.
+     * Closed tickets stay with whoever closed them: that work is done. Each
+     * moved ticket's assignment history records the move.
      *
      * @param  array<string, string|null>  $region
      * @return array{students: int, tickets: int}
@@ -158,43 +161,63 @@ class StudentAssigner
             fn ($value) => filled($value),
         );
 
-        // Same guard as assignByRegion(): no region would mean "everything
-        // this operator holds", which is a different, much bigger action.
+        // No region would mean "everything this operator holds" — a much
+        // bigger action than the form says it is.
         if ($region === [] || $from->is($to)) {
             return ['students' => 0, 'tickets' => 0];
         }
 
         $result = DB::transaction(function () use ($region, $from, $to, $actor) {
-            $ids = $this->inRegion($region)
-                ->where('assigned_to', $from->id)
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->pluck('id')
-                ->all();
+            $studentsInRegion = $this->inRegion($region)->select('id');
 
-            if ($ids === []) {
-                return ['students' => 0, 'tickets' => 0];
+            $tickets = Ticket::query()
+                ->open()
+                ->where('assigned_to', $from->id)
+                ->whereIn('student_id', $studentsInRegion)
+                ->lockForUpdate()
+                ->get(['id', 'assigned_to', 'status']);
+
+            $moved = 0;
+
+            if ($tickets->isNotEmpty()) {
+                $now = now();
+                $ids = $tickets->pluck('id')->all();
+
+                foreach (array_chunk($ids, 1000) as $chunk) {
+                    $moved += Ticket::whereIn('id', $chunk)->update(['assigned_to' => $to->id, 'assigned_at' => $now]);
+                }
+
+                foreach ($tickets->chunk(1000) as $chunk) {
+                    TicketAssignment::insert($chunk->map(fn (Ticket $t) => [
+                        'ticket_id' => $t->id,
+                        'from_user_id' => $from->id,
+                        'to_user_id' => $to->id,
+                        'assigned_by' => $actor->id,
+                        'note' => "Pindah operator dari {$from->name}",
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ])->values()->all());
+                }
             }
 
-            $students = Student::whereIn('id', $ids)->update([
-                'assignment_status' => AssignmentStatus::Assigned->value,
-                'assigned_to' => $to->id,
-                'assigned_by' => $actor->id,
-                'assigned_at' => now(),
-            ]);
+            $students = $this->inRegion($region)
+                ->where('assigned_to', $from->id)
+                ->update([
+                    'assigned_to' => $to->id,
+                    'assigned_by' => $actor->id,
+                    'assigned_at' => now(),
+                ]);
 
-            $tickets = $this->handOverTickets($ids, $to, $actor, "Pindah operator dari {$from->name}");
-
-            return ['students' => $students, 'tickets' => $tickets];
+            return ['students' => $students, 'tickets' => $moved];
         });
 
-        if ($result['students'] > 0) {
+        if ($result['tickets'] > 0 || $result['students'] > 0) {
             $this->log->log(
-                'student.moved',
+                'ticket.moved',
                 sprintf(
-                    'Pindah %d mahasiswa (%d tiket) wilayah %s dari %s ke %s',
-                    $result['students'],
+                    'Pindah %d tiket (%d mahasiswa) wilayah %s dari %s ke %s',
                     $result['tickets'],
+                    $result['students'],
                     implode(' › ', $region),
                     $from->name,
                     $to->name,

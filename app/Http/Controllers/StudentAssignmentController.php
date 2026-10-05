@@ -61,64 +61,83 @@ class StudentAssignmentController extends Controller
     }
 
     /**
-     * "Assign Wilayah & Ticket": every unassigned student in a region goes to
-     * one operator, and in the same step each of that operator's students in
-     * the region gets a ticket, already in the operator's name.
+     * "Buat Ticket per Wilayah": every student in the chosen region who has no
+     * ticket yet gets one, straight in the chosen operator's name. No
+     * assigning first — whether a student was "assigned" before does not
+     * matter, so a region where everyone is already held still works.
      *
      * Both an operator and a region are required: there is no "everything"
-     * button any more, so a ticket is never raised without someone to work
-     * it. The admin narrows as far as they like — a whole kabupaten, a
-     * kecamatan, a Pokjar/SALUT — and there is no count field, by design.
+     * button, so a ticket is never raised without someone to work it.
      */
     public function byRegion(Request $request, StudentTicketGenerator $generator): RedirectResponse
     {
-        $this->authorize(Permission::AssignStudents->value);
+        $this->authorize(Permission::CreateTickets->value);
+        $this->authorize(Permission::AssignTickets->value);
 
         [$region, $operator] = $this->regionAndOperator($request, 'operator_id');
 
         if ($region === null) {
             return back()->withErrors([
-                'kabupaten' => 'Pilih minimal satu tingkat wilayah (Kabupaten, Kecamatan, Pokjar/SALUT, …). Tanpa itu seluruh mahasiswa akan ikut terbagikan.',
+                'kabupaten' => 'Pilih minimal satu tingkat wilayah (Kabupaten, Kecamatan, Pokjar/SALUT, …). Tanpa itu seluruh mahasiswa akan ikut dibuatkan tiket.',
             ])->withInput();
         }
 
-        $result = $this->assigner->assignByRegion($region, $operator, $request->user());
-
-        // Tickets for this operator's students in the region that have none
-        // yet — the ones just assigned, and any they already held there.
-        $tickets = $request->user()->hasPermission(Permission::CreateTickets)
-            ? $generator->generate($region + ['operator' => (string) $operator->id], $request->user())['created']
-            : 0;
-
-        if ($result['assigned'] === 0 && $tickets === 0) {
-            return back()->withErrors([
-                'kabupaten' => $result['matched'] > 0
-                    ? "Semua {$result['matched']} mahasiswa di wilayah itu sudah dipegang operator lain, dan tiket {$operator->name} di wilayah ini sudah lengkap."
-                    : 'Tidak ada mahasiswa di wilayah itu.',
-            ])->withInput();
-        }
-
+        $result = $generator->generate($region, $request->user(), $operator);
         $where = $this->describe($region);
-        $message = "{$result['assigned']} mahasiswa wilayah {$where} ditugaskan ke {$operator->name}";
-        $message .= $tickets > 0 ? ", {$tickets} tiket dibuat." : '.';
 
-        // The gap between matched and assigned is how the admin learns part of
-        // the region was already someone else's.
-        if ($result['matched'] > $result['assigned']) {
-            $held = $result['matched'] - $result['assigned'];
-            $message .= " {$held} dilewati karena sudah dipegang operator (pakai Pindah Operator bila salah).";
+        if ($result['created'] === 0) {
+            return back()->withErrors([
+                'kabupaten' => $result['skipped'] > 0
+                    ? "Semua {$result['skipped']} mahasiswa wilayah {$where} sudah punya tiket. Pakai Pindah Ticket bila operatornya salah."
+                    : "Tidak ada mahasiswa di wilayah {$where}.",
+            ])->withInput();
+        }
+
+        $message = "{$result['created']} tiket mahasiswa wilayah {$where} dibuat untuk {$operator->name}.";
+
+        if ($result['skipped'] > 0) {
+            $message .= " {$result['skipped']} mahasiswa dilewati karena sudah punya tiket.";
         }
 
         return back()->with('success', $message);
     }
 
+    /** "Buat Ticket Terpilih": the students ticked in the list, to one operator. */
+    public function selectedTickets(Request $request, StudentTicketGenerator $generator): RedirectResponse
+    {
+        $this->authorize(Permission::CreateTickets->value);
+        $this->authorize(Permission::AssignTickets->value);
+
+        $data = $request->validate([
+            'students' => ['required', 'array', 'min:1'],
+            'students.*' => ['integer'],
+            'operator_id' => ['required', 'integer', User::ticketHandlerRule()],
+        ], [], [
+            'students' => 'mahasiswa',
+            'operator_id' => 'operator',
+        ]);
+
+        $operator = User::findOrFail($data['operator_id']);
+        $ids = array_values(array_unique(array_map('intval', $data['students'])));
+
+        $result = $generator->generate(['ids' => $ids], $request->user(), $operator);
+
+        if ($result['created'] === 0) {
+            return back()->withErrors(['students' => 'Mahasiswa yang dipilih sudah punya tiket.']);
+        }
+
+        return back()->with('success', "{$result['created']} tiket dibuat untuk {$operator->name}.");
+    }
+
     /**
-     * "Pindah Operator": a region handed to the wrong person goes to the
-     * right one — students and their open tickets together.
+     * "Pindah Ticket": a region given to the wrong operator goes to the right
+     * one — that operator's open tickets there, and any students assigned to
+     * them there the old way.
      */
     public function move(Request $request): RedirectResponse
     {
-        $this->authorize(Permission::AssignStudents->value);
+        // Moving tickets between operators is assigning them.
+        $this->authorize(Permission::AssignTickets->value);
 
         $request->validate([
             'from_operator_id' => ['required', 'integer', 'exists:users,id'],
@@ -141,15 +160,14 @@ class StudentAssignmentController extends Controller
 
         $result = $this->assigner->moveRegion($region, $from, $to, $request->user());
 
-        if ($result['students'] === 0) {
+        if ($result['tickets'] === 0 && $result['students'] === 0) {
             return back()->withErrors([
-                'move' => "{$from->name} tidak memegang mahasiswa di wilayah {$this->describe($region)}.",
+                'move' => "{$from->name} tidak memegang tiket terbuka di wilayah {$this->describe($region)}.",
             ])->withInput();
         }
 
         return back()->with('success', sprintf(
-            '%d mahasiswa dan %d tiket wilayah %s dipindah dari %s ke %s.',
-            $result['students'],
+            '%d tiket wilayah %s dipindah dari %s ke %s.',
             $result['tickets'],
             $this->describe($region),
             $from->name,

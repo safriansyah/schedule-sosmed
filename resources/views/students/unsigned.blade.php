@@ -98,8 +98,8 @@
         </div>
     </form>
 
-    {{-- Two counts: who is still free in this filter, and who already holds
-         students in the chosen region (what "Pindah Operator" can move). --}}
+    {{-- Two counts: who still has no ticket in this filter, and who holds the
+         open tickets in the chosen region (what "Pindah Ticket" can move). --}}
     <div class="mb-6 grid gap-4 sm:grid-cols-2">
         <div class="card border-brand-500/30 bg-brand-500/[0.04] p-4 dark:bg-brand-500/[0.08]">
             <div class="flex items-center gap-3">
@@ -110,7 +110,7 @@
                     <p class="text-2xl font-extrabold tracking-tight text-slate-800 dark:text-white">
                         {{ number_format($matching) }}
                     </p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Belum assigned pada filter ini</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Belum punya tiket pada filter ini</p>
                 </div>
             </div>
         </div>
@@ -126,12 +126,12 @@
                             {{ number_format($regionHolders->sum()) }}
                         </p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">
-                            Sudah dipegang {{ $regionHolders->count() }} operator di wilayah ini
+                            Tiket terbuka, dipegang {{ $regionHolders->count() }} operator di wilayah ini
                         </p>
                     @else
                         <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Pilih wilayah</p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">
-                            untuk melihat siapa yang sudah memegang mahasiswa di sana
+                            untuk melihat siapa yang memegang tiket di sana
                         </p>
                     @endif
                 </div>
@@ -180,27 +180,23 @@
             </p>
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Pilih minimal satu tingkat wilayah di filter atas — Kabupaten/Kota, Kecamatan, Kelurahan, atau Pokjar/SALUT.
-                Tanpa wilayah, tidak ada yang bisa dibagikan atau dipindah.
+                Tanpa wilayah, tidak ada tiket yang bisa dibuat atau dipindah.
             </p>
         @endif
     </div>
 
     <div class="grid gap-6 xl:grid-cols-2">
-        {{-- A. Assign Wilayah & Ticket: one button, both steps. --}}
+        {{-- A. Buat Ticket per Wilayah: straight to an operator, no assigning. --}}
         <form method="POST" action="{{ route('students.assign.region') }}" class="card p-5">
             @csrf
 
             <h2 class="mb-1 flex items-center gap-2 text-base font-bold text-slate-800 dark:text-white">
-                <x-icon name="user-plus" class="h-4 w-4 text-brand-500"/> Assign Wilayah &amp; Ticket
+                <x-icon name="file-text" class="h-4 w-4 text-brand-500"/> Buat Ticket per Wilayah
             </h2>
             <p class="mb-4 text-xs text-slate-400">
-                Mahasiswa belum-assigned di wilayah terpilih diberikan ke satu operator,
-                @if ($canGenerate)
-                    dan setiap mahasiswa operator itu di wilayah ini langsung dibuatkan tiket atas namanya
-                    (source <span class="font-medium text-slate-500 dark:text-slate-300">Import Mahasiswa</span>).
-                @else
-                    tanpa tiket (akun Anda tidak punya izin membuat tiket).
-                @endif
+                Setiap mahasiswa di wilayah terpilih yang belum punya tiket langsung dibuatkan tiket atas nama operator
+                yang dipilih (source <span class="font-medium text-slate-500 dark:text-slate-300">Import Mahasiswa</span>).
+                Mahasiswa yang sudah punya tiket dilewati, jadi aman ditekan dua kali.
             </p>
 
             @error('kabupaten') <p class="form-error mb-3">{{ $message }}</p> @enderror
@@ -214,7 +210,7 @@
 
             @if ($regionChosen)
                 <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                    <strong class="text-slate-700 dark:text-slate-200">{{ number_format($matching) }}</strong> mahasiswa belum assigned di wilayah ini.
+                    <strong class="text-slate-700 dark:text-slate-200">{{ number_format($matching) }}</strong> mahasiswa di wilayah ini belum punya tiket.
                 </p>
             @endif
 
@@ -223,28 +219,28 @@
                 <select id="operator_region" name="operator_id" class="input" required>
                     <option value="">Pilih operator…</option>
                     <x-operator-options :operators="$operators"
-                        :suffix="fn ($op) => number_format($workload->firstWhere('user_id', $op->id)->total ?? 0).' mahasiswa'"/>
+                        />
                 </select>
                 @error('operator_id') <p class="form-error">{{ $message }}</p> @enderror
             </div>
 
-            <button class="btn-primary mt-4 w-full" @disabled($regionChosen === [])>
-                <x-icon name="check" class="h-4 w-4"/>
-                {{ $canGenerate ? 'Assign Wilayah & Buat Tiket' : 'Assign Wilayah' }}
+            <button class="btn-primary mt-4 w-full" @disabled($regionChosen === [] || $matching === 0)>
+                <x-icon name="file-text" class="h-4 w-4"/>
+                Buat {{ $regionChosen ? number_format($matching).' ' : '' }}Ticket
             </button>
         </form>
 
-        {{-- B. Pindah Operator: undo a region handed to the wrong person. --}}
+        {{-- B. Pindah Ticket: undo a region given to the wrong operator. --}}
         <form method="POST" action="{{ route('students.assign.move') }}" class="card p-5"
-              onsubmit="return confirm('Pindahkan mahasiswa & tiket wilayah ini ke operator tujuan?')">
+              onsubmit="return confirm('Pindahkan tiket wilayah ini ke operator tujuan?')">
             @csrf
 
             <h2 class="mb-1 flex items-center gap-2 text-base font-bold text-slate-800 dark:text-white">
-                <x-icon name="rotate" class="h-4 w-4 text-violet-500"/> Pindah Operator
+                <x-icon name="rotate" class="h-4 w-4 text-violet-500"/> Pindah Ticket
             </h2>
             <p class="mb-4 text-xs text-slate-400">
-                Salah memilih operator untuk sebuah wilayah? Semua mahasiswa yang dipegang operator asal di wilayah
-                terpilih — beserta tiketnya yang masih terbuka — dipindah ke operator tujuan. Tercatat di riwayat tiket.
+                Salah memilih operator untuk sebuah wilayah? Semua tiket terbuka milik operator asal di wilayah terpilih
+                dipindah ke operator tujuan. Tiket yang sudah ditutup tidak ikut. Tercatat di riwayat tiket.
             </p>
 
             @error('move') <p class="form-error mb-3">{{ $message }}</p> @enderror
@@ -260,7 +256,7 @@
                         <option value="">{{ $regionHolders->isEmpty() ? ($regionChosen ? 'Belum ada yang memegang' : 'Pilih wilayah dulu') : 'Pilih operator asal…' }}</option>
                         @foreach ($regionHolders->sortDesc() as $userId => $total)
                             <option value="{{ $userId }}" @selected((string) old('from_operator_id') === (string) $userId)>
-                                {{ $holderNames[$userId] ?? 'Pengguna #'.$userId }} — {{ number_format($total) }} mahasiswa
+                                {{ $holderNames[$userId] ?? 'Pengguna #'.$userId }} — {{ number_format($total) }} tiket
                             </option>
                         @endforeach
                     </select>
@@ -278,14 +274,14 @@
             </div>
 
             <button class="btn-outline mt-4 w-full" @disabled($regionHolders->isEmpty())>
-                <x-icon name="rotate" class="h-4 w-4"/> Pindahkan Mahasiswa &amp; Tiket
+                <x-icon name="rotate" class="h-4 w-4"/> Pindahkan Tiket
             </button>
         </form>
     </div>
 
-    {{-- Manual select, unchanged: picking individual rows is still the right
-         tool for the handful of exceptions a region rule cannot express. --}}
-    <form method="POST" action="{{ route('students.assign.selected') }}" class="mt-6"
+    {{-- Manual select: picking individual rows is still the right tool for
+         the handful of exceptions a region rule cannot express. --}}
+    <form method="POST" action="{{ route('students.tickets.selected') }}" class="mt-6"
           {{-- The phone list and the desktop table both render a checkbox per
                student, so every id exists twice in the DOM. Counting and
                selecting therefore work on unique values; the server also
@@ -343,14 +339,14 @@
                     </select>
 
                     <button class="btn-primary" x-bind:disabled="count === 0">
-                        <x-icon name="check" class="h-4 w-4"/> Assign Terpilih
+                        <x-icon name="file-text" class="h-4 w-4"/> Buat Ticket Terpilih
                     </button>
                 </div>
             </div>
 
             @if ($students->isEmpty())
-                <x-empty-state icon="check-circle" title="Tidak ada yang belum assigned"
-                               description="Semua mahasiswa pada filter ini sudah dibagikan."/>
+                <x-empty-state icon="check-circle" title="Semua sudah punya tiket"
+                               description="Semua mahasiswa pada filter ini sudah dibuatkan tiket."/>
             @else
                 {{-- Phone: a tick-box list instead of a five-column table.
                      Selecting students is the core admin action here, and it
@@ -395,7 +391,7 @@
                                 <th class="px-4 py-3 font-semibold">Mahasiswa</th>
                                 <th class="px-4 py-3 font-semibold">Wilayah</th>
                                 <th class="px-4 py-3 font-semibold">Kondisi</th>
-                                <th class="px-4 py-3 font-semibold">Tiket</th>
+                                <th class="px-4 py-3 font-semibold">Pemegang</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-white/5">
@@ -414,11 +410,7 @@
                                         <span class="{{ $student->kategori_masalah->badge() }}">{{ $student->kategori_masalah->short() }}</span>
                                     </td>
                                     <td class="px-4 py-3">
-                                        @if ($student->tickets_count ?? 0)
-                                            <span class="badge-emerald">Ada</span>
-                                        @else
-                                            <span class="text-xs text-slate-400">—</span>
-                                        @endif
+                                        <span class="text-xs text-slate-500 dark:text-slate-400">{{ $student->assignee?->name ?? '—' }}</span>
                                     </td>
                                 </tr>
                             @endforeach

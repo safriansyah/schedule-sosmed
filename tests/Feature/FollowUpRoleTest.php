@@ -193,7 +193,13 @@ it('sees its own students in Daftar Mahasiswa, read-only', function () {
         ->assertSee('Mahasiswa Milik FU')
         ->assertDontSee('Mahasiswa Orang Lain');
 
-    $this->actingAs($user)->get(route('students.show', $mine))->assertOk();
+    // The detail page: every field locked, no Simpan.
+    $detail = $this->actingAs($user)->get(route('students.show', $mine))->assertOk()->getContent();
+    expect($detail)
+        ->toContain('Hanya lihat')
+        ->toMatch('/<fieldset[^>]*disabled/')
+        ->not->toContain('</x-icon> Simpan');
+    expect(preg_match('/<button class="btn-primary"><svg[^>]*>.*?<\/svg> Simpan<\/button>/s', $detail))->toBe(0);
     $this->actingAs($user)->get(route('students.show', $theirs))->assertForbidden();
 
     // Looking, not editing.

@@ -61,10 +61,13 @@ class StudentTicketGenerator
     /**
      * Raise a ticket for every student in the filter that has none.
      *
+     * $assignee: hand every new ticket to this operator ("Buat Ticket per
+     * Wilayah"). Left null, a ticket follows whoever holds the student.
+     *
      * @param  array<string, mixed>  $filters
      * @return array{created: int, skipped: int}
      */
-    public function generate(array $filters, User $actor): array
+    public function generate(array $filters, User $actor, ?User $assignee = null): array
     {
         $categories = $this->categoryMap();
         $created = 0;
@@ -85,7 +88,7 @@ class StudentTicketGenerator
                 break;
             }
 
-            $created += $this->insertBatch($students, $categories, $actor);
+            $created += $this->insertBatch($students, $categories, $actor, $assignee);
         }
 
         if ($created > 0) {
@@ -115,6 +118,8 @@ class StudentTicketGenerator
     {
         return Student::query()
             ->filtered($filters)
+            // Picked by hand on /students/unsigned.
+            ->when(isset($filters['ids']), fn (Builder $q) => $q->whereIn('id', (array) $filters['ids']))
             ->whereNotNull('nim')
             ->whereNotExists(function ($q) {
                 $q->selectRaw('1')
@@ -129,6 +134,7 @@ class StudentTicketGenerator
     {
         return Student::query()
             ->filtered($filters)
+            ->when(isset($filters['ids']), fn (Builder $q) => $q->whereIn('id', (array) $filters['ids']))
             ->whereExists(function ($q) {
                 $q->selectRaw('1')
                     ->from('tickets')
@@ -144,9 +150,9 @@ class StudentTicketGenerator
      * @param  \Illuminate\Support\Collection<int, Student>  $students
      * @param  array<string, array{0: int|null, 1: int|null}>  $categories
      */
-    private function insertBatch($students, array $categories, User $actor): int
+    private function insertBatch($students, array $categories, User $actor, ?User $assignee = null): int
     {
-        return DB::transaction(function () use ($students, $categories, $actor) {
+        return DB::transaction(function () use ($students, $categories, $actor, $assignee) {
             // One number lookup for the whole batch. `next()` gives the first;
             // the rest follow it, and the UNIQUE index is still the thing that
             // guarantees no duplicate ever lands.
@@ -175,9 +181,10 @@ class StudentTicketGenerator
                     'description' => $this->descriptionFor($student, $condition),
                     'category_id' => $categoryId,
                     'sub_category_id' => $subCategoryId,
-                    // A student already handed to an operator brings the ticket
-                    // with them — re-distributing it by hand would be busywork.
-                    'status' => $student->assigned_to
+                    // The operator chosen for the region, or else whoever
+                    // already holds the student — re-distributing by hand
+                    // would be busywork.
+                    'status' => ($assignee?->id ?? $student->assigned_to)
                         ? TicketStatus::Assigned->value
                         : TicketStatus::Open->value,
                     'priority' => ($condition?->priority() ?? Priority::Normal)->value,
@@ -188,8 +195,8 @@ class StudentTicketGenerator
                     'requester_nac' => $student->nac,
                     'requester_phone' => $student->no_hp_raw ?: $student->no_hp,
                     'requester_email' => $student->email,
-                    'assigned_to' => $student->assigned_to,
-                    'assigned_at' => $student->assigned_to ? $now : null,
+                    'assigned_to' => $assignee?->id ?? $student->assigned_to,
+                    'assigned_at' => ($assignee?->id ?? $student->assigned_to) ? $now : null,
                     'created_by' => $actor->id,
                     'extra' => json_encode(['generated_from_import' => true]),
                     'created_at' => $now,

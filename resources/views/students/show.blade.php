@@ -27,13 +27,22 @@
 
     <div class="grid gap-6 lg:grid-cols-3">
         <div class="space-y-6 lg:col-span-2">
-            {{-- Editable record --}}
+            {{-- The record. Editable only with ManageStudents; for everyone else
+                 (Operator, Operator Follow Up) every field is locked by the
+                 fieldset — read-only, and nothing to submit. --}}
+            @php $canEditStudent = auth()->user()->can(\App\Enums\Permission::ManageStudents->value); @endphp
             <form method="POST" action="{{ route('students.update', $student) }}" class="card p-5">
                 @csrf
                 @method('PUT')
 
-                <h2 class="mb-4 text-base font-bold text-slate-800 dark:text-white">Data Mahasiswa</h2>
+                <h2 class="mb-4 flex items-center gap-2 text-base font-bold text-slate-800 dark:text-white">
+                    Data Mahasiswa
+                    @unless ($canEditStudent)
+                        <span class="badge-slate text-[11px] font-medium"><x-icon name="eye" class="h-3 w-3"/> Hanya lihat</span>
+                    @endunless
+                </h2>
 
+                <fieldset @disabled(! $canEditStudent) class="m-0 min-w-0 border-0 p-0">
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="nama" class="label">Nama</label>
@@ -113,6 +122,7 @@
                     <label for="catatan" class="label">Catatan</label>
                     <textarea id="catatan" name="catatan" rows="3" class="input">{{ old('catatan', $student->catatan) }}</textarea>
                 </div>
+                </fieldset>
 
                 @can(\App\Enums\Permission::ManageStudents->value)
                     <div class="mt-4 flex justify-end">

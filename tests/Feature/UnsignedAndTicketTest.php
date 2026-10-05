@@ -13,6 +13,8 @@ use App\Enums\AssignmentStatus;
 use App\Enums\RoleName;
 use App\Enums\StudentCondition;
 use App\Enums\TicketSource;
+use App\Enums\TicketStatus;
+use AppEnumsTicketStatus;
 use App\Models\Setting;
 use App\Models\Student;
 use App\Models\Task;
@@ -120,8 +122,14 @@ it('no longer generates tickets for everyone without an operator and a region', 
     expect(Ticket::where('requester_nim', 'like', 'GEN%')->count())->toBe(0);
 });
 
-it('assigns a region and raises its tickets in one step', function () {
-    genStudents(4);
+it('raises a region\'s tickets straight to an operator, without assigning first', function () {
+    // Half the region already "held" by someone else the old way: it must not
+    // matter — every student without a ticket gets one, for the chosen operator.
+    $someoneElse = operatorNamed('gen-held@test.local');
+    genStudents(2);
+    Student::create(['nim' => 'GEN0000010', 'nama' => 'Sudah Dipegang', 'kabupaten' => 'Kabupaten Generate', 'kecamatan' => 'Kecamatan Ganjil',
+        'kategori_masalah' => StudentCondition::OngoingBillingPending->value, 'assigned_to' => $someoneElse->id, 'assignment_status' => AssignmentStatus::Assigned->value]);
+
     $operator = operatorNamed('gen-region@test.local');
 
     $this->actingAs(admin())
@@ -130,28 +138,56 @@ it('assigns a region and raises its tickets in one step', function () {
         ->assertRedirect()
         ->assertSessionHas('success');
 
-    $students = Student::where('nim', 'like', 'GEN%')->get();
     $tickets = Ticket::where('requester_nim', 'like', 'GEN%')->get();
 
-    expect($students->pluck('assigned_to')->unique()->all())->toBe([$operator->id])
-        ->and($tickets)->toHaveCount(4)
+    expect($tickets)->toHaveCount(3)
         ->and($tickets->pluck('assigned_to')->unique()->all())->toBe([$operator->id])
-        ->and($tickets->pluck('source')->unique()->map->value->all())->toBe([TicketSource::StudentImport->value]);
+        ->and($tickets->pluck('status')->unique()->map->value->all())->toBe([TicketStatus::Assigned->value])
+        ->and($tickets->pluck('source')->unique()->map->value->all())->toBe([TicketSource::StudentImport->value])
+        // No assigning happened: the students' own assignment is untouched.
+        ->and(Student::where('nim', 'like', 'GEN%')->whereNull('assigned_to')->count())->toBe(2);
 
-    // Without a region nothing happens at all.
-    $this->actingAs(admin())
-        ->post(route('students.assign.region'), ['operator_id' => $operator->id])
+    // The operator sees those students in Daftar Mahasiswa through the ticket.
+    $this->actingAs($operator)->get(route('students.index', ['q' => 'GEN000']))
+        ->assertOk()
+        ->assertSee('GEN0000000')
+        ->assertSee('GEN0000010');
+
+    // Pressing again creates nothing new; no region is refused outright.
+    $this->actingAs(admin())->post(route('students.assign.region'), ['kabupaten' => 'Kabupaten Generate', 'operator_id' => $operator->id])
         ->assertSessionHasErrors('kabupaten');
+    $this->actingAs(admin())->post(route('students.assign.region'), ['operator_id' => $operator->id])
+        ->assertSessionHasErrors('kabupaten');
+
+    expect(Ticket::where('requester_nim', 'like', 'GEN%')->count())->toBe(3);
 });
 
-it('moves a region from the wrong operator to the right one, tickets included', function () {
-    genStudents(4);
-    $wrong = operatorNamed('gen-wrong@test.local');
-    $right = operatorNamed('gen-right@test.local');
+it('raises tickets for hand-picked students', function () {
+    genStudents(3);
+    $operator = operatorNamed('gen-pick@test.local');
+    $picked = Student::where('nim', 'like', 'GEN%')->orderBy('id')->limit(2)->pluck('id')->all();
 
+    $this->actingAs(admin())
+        ->post(route('students.tickets.selected'), ['students' => $picked, 'operator_id' => $operator->id])
+        ->assertSessionHas('success');
+
+    expect(Ticket::whereIn('student_id', $picked)->pluck('assigned_to')->unique()->all())->toBe([$operator->id])
+        ->and(Ticket::where('requester_nim', 'like', 'GEN%')->count())->toBe(2);
+});
+
+it('moves a region\'s open tickets from the wrong operator to the right one', function () {
+    genStudents(4);
+    $wrong = operatorNamed('gen-wrong@test.local', RoleName::FollowUp);
+    $right = operatorNamed('gen-right@test.local', RoleName::FollowUp);
+
+    // Tickets raised straight to the wrong operator, no student assigned.
     $this->actingAs(admin())->post(route('students.assign.region'), ['kabupaten' => 'Kabupaten Generate', 'operator_id' => $wrong->id]);
 
-    // Only one kecamatan moves; the other stays with the first operator.
+    // One already closed: done work stays with whoever did it.
+    $closed = Ticket::where('requester_nim', 'like', 'GEN%')->orderBy('id')->first();
+    $closed->forceFill(['status' => TicketStatus::Closed->value])->save();
+
+    // Only one kecamatan moves; the other stays.
     $this->actingAs(admin())
         ->from(route('students.unsigned'))
         ->post(route('students.assign.move'), [
@@ -163,15 +199,20 @@ it('moves a region from the wrong operator to the right one, tickets included', 
         ->assertRedirect()
         ->assertSessionHas('success');
 
-    $moved = Student::where('nim', 'like', 'GEN%')->where('kecamatan', 'Kecamatan Ganjil')->get();
-    $stayed = Student::where('nim', 'like', 'GEN%')->where('kecamatan', 'Kecamatan Genap')->get();
+    $ganjil = Ticket::whereIn('student_id', Student::where('nim', 'like', 'GEN%')->where('kecamatan', 'Kecamatan Ganjil')->pluck('id'))->get();
+    $genap = Ticket::whereIn('student_id', Student::where('nim', 'like', 'GEN%')->where('kecamatan', 'Kecamatan Genap')->pluck('id'))->get();
 
-    expect($moved->pluck('assigned_to')->unique()->all())->toBe([$right->id])
-        ->and($stayed->pluck('assigned_to')->unique()->all())->toBe([$wrong->id])
-        ->and(Ticket::whereIn('student_id', $moved->pluck('id'))->pluck('assigned_to')->unique()->all())->toBe([$right->id])
-        ->and(Ticket::whereIn('student_id', $stayed->pluck('id'))->pluck('assigned_to')->unique()->all())->toBe([$wrong->id])
-        ->and(\App\Models\TicketAssignment::whereIn('ticket_id', Ticket::whereIn('student_id', $moved->pluck('id'))->pluck('id'))
-            ->where('to_user_id', $right->id)->where('note', 'like', 'Pindah operator%')->count())->toBe($moved->count());
+    $openGanjil = $ganjil->reject(fn ($t) => $t->id === $closed->id);
+
+    expect($openGanjil->pluck('assigned_to')->unique()->all())->toBe([$right->id])
+        ->and($genap->pluck('assigned_to')->unique()->all())->toBe([$wrong->id])
+        ->and($closed->fresh()->assigned_to)->toBe($wrong->id)
+        ->and(\App\Models\TicketAssignment::whereIn('ticket_id', $openGanjil->pluck('id'))
+            ->where('from_user_id', $wrong->id)->where('to_user_id', $right->id)->count())->toBe($openGanjil->count());
+
+    // The new holder works them; the old one no longer sees them.
+    $this->actingAs($right)->get(route('tickets.show', $openGanjil->first()))->assertOk();
+    $this->actingAs($wrong)->get(route('tickets.show', $openGanjil->first()))->assertForbidden();
 
     // Same operator on both sides, or no region: refused.
     $this->actingAs(admin())->post(route('students.assign.move'), [

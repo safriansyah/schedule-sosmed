@@ -93,13 +93,18 @@ it('renders the student list, detail and hand-out screens', function () {
         ->assertOk()
         // One combined action, plus the undo; the old "generate everything"
         // form is gone.
-        ->assertSee('Assign Wilayah &amp; Ticket', false)
-        ->assertSee('Pindah Operator')
+        ->assertSee('Buat Ticket per Wilayah')
+        ->assertSee('Pindah Ticket')
         ->assertDontSee(route('students.tickets.generate'), false);
 
-    $this->actingAs(admin())->get(route('students.unsigned', ['q' => 'SMOKE00001']))
+    // The list there is "no ticket yet": a student with a ticket is gone from
+    // it, one without is listed.
+    \App\Models\Student::create(['nim' => 'SMOKE00099', 'nama' => 'Mahasiswa Tanpa Tiket']);
+
+    $this->actingAs(admin())->get(route('students.unsigned', ['q' => 'SMOKE000']))
         ->assertOk()
-        ->assertSee('Mahasiswa Smoke');
+        ->assertSee('Mahasiswa Tanpa Tiket')
+        ->assertDontSee('SMOKE00001');
 });
 
 it('renders the import screens', function () {
