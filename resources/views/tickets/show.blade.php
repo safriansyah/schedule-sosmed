@@ -657,11 +657,11 @@
                             </p>
 
                             <template x-for="(extra, index) in extras" :key="index">
-                                <div class="mb-2 flex gap-2">
+                                <div class="mb-2 flex flex-wrap gap-2 sm:flex-nowrap">
                                     <input type="text" :name="`extra_key[${index}]`" x-model="extra.key"
-                                           class="input sm:w-56" placeholder="Label (mis. no_hp)">
+                                           class="input w-full sm:w-56" placeholder="Label (mis. no_hp)">
                                     <input type="text" :name="`extra_value[${index}]`" x-model="extra.value"
-                                           class="input flex-1" placeholder="Nilai">
+                                           class="input min-w-0 flex-1" placeholder="Nilai">
                                     <button type="button" @click="extras.splice(index, 1)" x-show="extras.length > 1"
                                             class="btn-outline btn-sm shrink-0">
                                         <x-icon name="x" class="h-3.5 w-3.5"/>

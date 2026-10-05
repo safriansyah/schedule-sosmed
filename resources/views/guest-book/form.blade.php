@@ -117,7 +117,7 @@
             <div x-data="signaturePad()">
                 <div class="mb-1.5 flex items-center justify-between">
                     <p class="label !mb-0">Paraf <span class="text-rose-500">*</span></p>
-                    <button type="button" @click="clear()" class="text-xs font-semibold text-brand-600 hover:underline dark:text-brand-300">
+                    <button type="button" @click="clear()" class="-my-2 rounded-lg px-2 py-2 text-xs font-semibold text-brand-600 hover:bg-brand-500/10 dark:text-brand-300">
                         Hapus paraf
                     </button>
                 </div>

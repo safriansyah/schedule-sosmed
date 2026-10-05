@@ -170,7 +170,7 @@
         @foreach (['list' => ['Per komentar', 'message'], 'account' => ['Per akun', 'users']] as $key => [$label, $icon])
             <a href="{{ route('interactions.index', array_filter(['view' => $key === 'account' ? 'account' : null] + \Illuminate\Support\Arr::except($filters, 'view'))) }}"
                @class([
-                   'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+                   'inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition',
                    'bg-white text-brand-700 shadow-sm dark:bg-ink-850 dark:text-brand-300' => $view === $key,
                    'text-slate-500 hover:text-slate-700 dark:text-slate-400' => $view !== $key,
                ])>
@@ -196,7 +196,7 @@
                     <label class="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
                         <input type="checkbox" :checked="all"
                                @change="selected = $event.target.checked
-                                    ? [...$el.closest('form').querySelectorAll('input[name='ids[]']')].map(i => i.value)
+                                    ? [...$el.closest('form').querySelectorAll('input[name=&quot;ids[]&quot;]')].map(i => i.value)
                                     : []"
                                class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40 dark:border-white/20 dark:bg-ink-850">
                         Pilih semua

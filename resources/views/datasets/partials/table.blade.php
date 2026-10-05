@@ -20,37 +20,37 @@
         <div class="relative flex-1">
             <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400"/>
             <input x-model="filters.search" @input.debounce.350ms="resetAndLoad()"
-                   class="input pl-10" placeholder="Search name, username, ID…">
+                   class="input pl-10" placeholder="Cari nama, username, ID…">
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
             <select x-model="filters.platform" @change="resetAndLoad()" class="input !w-auto">
-                <option value="">All platforms</option>
+                <option value="">Semua platform</option>
                 @foreach ($platforms as $p)
                     <option value="{{ $p }}">{{ ucfirst($p) }}</option>
                 @endforeach
             </select>
 
             <select x-model="filters.valid" @change="resetAndLoad()" class="input !w-auto">
-                <option value="">Valid: any</option>
+                <option value="">Valid: semua</option>
                 <option value="1">Valid</option>
-                <option value="0">Invalid</option>
+                <option value="0">Tidak valid</option>
             </select>
 
             <select x-model="filters.qualified" @change="resetAndLoad()" class="input !w-auto">
-                <option value="">Qualified: any</option>
-                <option value="1">Qualified</option>
-                <option value="0">Not qualified</option>
+                <option value="">Memenuhi syarat: semua</option>
+                <option value="1">Memenuhi syarat</option>
+                <option value="0">Tidak memenuhi syarat</option>
             </select>
 
             <select x-model="filters.bucket" @change="resetAndLoad()" class="input !w-auto">
-                <option value="">Followers: all</option>
+                <option value="">Pengikut: semua</option>
                 @foreach (config('datasets.follower_buckets') as $b)
                     <option value="{{ $b['label'] }}">{{ $b['label'] }}</option>
                 @endforeach
             </select>
 
-            <button @click="resetFilters()" class="btn-ghost !px-2.5" title="Clear filters">
+            <button type="button" @click="resetFilters()" class="btn-ghost !px-2.5" title="Hapus filter">
                 <x-icon name="x" class="w-4 h-4"/>
             </button>
         </div>
@@ -60,19 +60,19 @@
     <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
         <div class="flex items-center gap-3">
             <span class="text-slate-500 dark:text-slate-400">
-                <span class="font-semibold text-slate-700 dark:text-slate-200" x-text="meta.total ?? 0"></span> rows
+                <span class="font-semibold text-slate-700 dark:text-slate-200" x-text="meta.total ?? 0"></span> baris
             </span>
             <template x-if="selected.length">
-                <button @click="bulkDelete()" class="btn-danger !py-1.5 !px-3">
+                <button type="button" @click="bulkDelete()" class="btn-danger !py-1.5 !px-3">
                     <x-icon name="trash" class="w-4 h-4"/>
-                    Delete (<span x-text="selected.length"></span>)
+                    Hapus (<span x-text="selected.length"></span>)
                 </button>
             </template>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-            <button @click="$dispatch('open-modal', 'add-row')" class="btn-outline !py-1.5 !px-3">
-                <x-icon name="plus" class="w-4 h-4"/> Add row
+            <button type="button" @click="$dispatch('open-modal', 'add-row')" class="btn-outline !py-1.5 !px-3">
+                <x-icon name="plus" class="w-4 h-4"/> Tambah baris
             </button>
             <a :href="exportUrl + '?format=csv&' + queryString()" class="btn-outline !py-1.5 !px-3">
                 <x-icon name="download" class="w-4 h-4"/> CSV
@@ -82,7 +82,7 @@
             </a>
             <select x-model.number="perPage" @change="resetAndLoad()" class="input !w-auto !py-1.5">
                 @foreach ($perPageOptions as $opt)
-                    <option value="{{ $opt }}">{{ $opt }} / page</option>
+                    <option value="{{ $opt }}">{{ $opt }} / halaman</option>
                 @endforeach
             </select>
         </div>
@@ -98,9 +98,9 @@
                                class="rounded border-slate-300 text-brand-600 dark:bg-ink-850 dark:border-white/10">
                     </th>
                     @foreach ([
-                        ['external_id','ID'], ['name','Name'], ['username','Username'],
-                        ['platform','Platform'], ['followers','Followers'], ['following','Following'],
-                        ['posts','Posts'], ['is_valid','Valid'], ['is_qualified','Qualified'],
+                        ['external_id','ID'], ['name','Nama'], ['username','Username'],
+                        ['platform','Platform'], ['followers','Pengikut'], ['following','Mengikuti'],
+                        ['posts','Postingan'], ['is_valid','Valid'], ['is_qualified','Memenuhi syarat'],
                     ] as [$col, $label])
                         <th class="cursor-pointer whitespace-nowrap px-4 py-3 hover:text-slate-600 dark:hover:text-slate-200"
                             @click="sortBy('{{ $col }}')">
@@ -113,7 +113,7 @@
                             </span>
                         </th>
                     @endforeach
-                    <th class="px-4 py-3 text-right">Actions</th>
+                    <th class="px-4 py-3 text-right">Aksi</th>
                 </tr>
             </thead>
 
@@ -128,7 +128,7 @@
                 </template>
 
                 <template x-if="!loading && rows.length === 0">
-                    <tr><td colspan="11" class="px-4 py-16 text-center text-slate-400">No rows match your filters.</td></tr>
+                    <tr><td colspan="11" class="px-4 py-16 text-center text-slate-400">Tidak ada baris yang cocok dengan filter.</td></tr>
                 </template>
 
                 <template x-for="row in rows" :key="row.id">
@@ -167,13 +167,13 @@
                         <template x-if="edit.id !== row.id">
                             <td class="px-4 py-3">
                                 <span :class="row.is_valid ? 'badge-green' : 'badge-red'"
-                                      x-text="row.is_valid ? 'Valid' : 'Invalid'"></span>
+                                      x-text="row.is_valid ? 'Valid' : 'Tidak valid'"></span>
                             </td>
                         </template>
                         <template x-if="edit.id !== row.id">
                             <td class="px-4 py-3">
                                 <span :class="row.is_qualified ? 'badge-amber' : 'badge-slate'"
-                                      x-text="row.is_qualified ? 'Yes' : 'No'"></span>
+                                      x-text="row.is_qualified ? 'Ya' : 'Tidak'"></span>
                             </td>
                         </template>
 
@@ -202,14 +202,14 @@
                         <template x-if="edit.id === row.id">
                             <td class="px-2 py-2">
                                 <select x-model.number="edit.is_valid" class="input !py-1.5 !text-xs">
-                                    <option value="1">Valid</option><option value="0">Invalid</option>
+                                    <option value="1">Valid</option><option value="0">Tidak valid</option>
                                 </select>
                             </td>
                         </template>
                         <template x-if="edit.id === row.id">
                             <td class="px-2 py-2">
                                 <select x-model.number="edit.is_qualified" class="input !py-1.5 !text-xs">
-                                    <option value="1">Yes</option><option value="0">No</option>
+                                    <option value="1">Ya</option><option value="0">Tidak</option>
                                 </select>
                             </td>
                         </template>
@@ -217,22 +217,22 @@
                         <td class="px-4 py-3 text-right">
                             <div class="flex items-center justify-end gap-1">
                                 <template x-if="edit.id !== row.id">
-                                    <button @click="startEdit(row)" class="btn-ghost !px-2 !py-1" title="Edit">
+                                    <button type="button" @click="startEdit(row)" class="btn-ghost !px-2 !py-1" title="Ubah">
                                         <x-icon name="edit" class="w-4 h-4"/>
                                     </button>
                                 </template>
                                 <template x-if="edit.id !== row.id">
-                                    <button @click="destroy(row)" class="btn-ghost !px-2 !py-1 text-rose-500" title="Delete">
+                                    <button type="button" @click="destroy(row)" class="btn-ghost !px-2 !py-1 text-rose-500" title="Hapus">
                                         <x-icon name="trash" class="w-4 h-4"/>
                                     </button>
                                 </template>
                                 <template x-if="edit.id === row.id">
-                                    <button @click="saveEdit()" class="btn-ghost !px-2 !py-1 text-emerald-500" title="Save">
+                                    <button type="button" @click="saveEdit()" class="btn-ghost !px-2 !py-1 text-emerald-500" title="Simpan">
                                         <x-icon name="check" class="w-4 h-4"/>
                                     </button>
                                 </template>
                                 <template x-if="edit.id === row.id">
-                                    <button @click="edit.id = null" class="btn-ghost !px-2 !py-1" title="Cancel">
+                                    <button type="button" @click="edit.id = null" class="btn-ghost !px-2 !py-1" title="Batal">
                                         <x-icon name="x" class="w-4 h-4"/>
                                     </button>
                                 </template>
@@ -247,18 +247,18 @@
     {{-- Pagination --}}
     <div class="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm dark:border-white/5 sm:flex-row">
         <p class="text-slate-500 dark:text-slate-400">
-            Showing <span class="font-semibold" x-text="meta.from ?? 0"></span>–<span class="font-semibold" x-text="meta.to ?? 0"></span>
-            of <span class="font-semibold" x-text="meta.total ?? 0"></span>
+            Menampilkan <span class="font-semibold" x-text="meta.from ?? 0"></span>–<span class="font-semibold" x-text="meta.to ?? 0"></span>
+            dari <span class="font-semibold" x-text="meta.total ?? 0"></span>
         </p>
         <div class="flex items-center gap-1">
-            <button @click="go(meta.current_page - 1)" :disabled="meta.current_page <= 1"
+            <button type="button" @click="go(meta.current_page - 1)" :disabled="meta.current_page <= 1"
                     class="btn-ghost !px-2 !py-1.5 disabled:opacity-40">
                 <x-icon name="chevron-left" class="w-4 h-4"/>
             </button>
             <span class="px-3 text-slate-500 dark:text-slate-400">
                 <span x-text="meta.current_page ?? 1"></span> / <span x-text="meta.last_page ?? 1"></span>
             </span>
-            <button @click="go(meta.current_page + 1)" :disabled="meta.current_page >= meta.last_page"
+            <button type="button" @click="go(meta.current_page + 1)" :disabled="meta.current_page >= meta.last_page"
                     class="btn-ghost !px-2 !py-1.5 disabled:opacity-40">
                 <x-icon name="chevron-right" class="w-4 h-4"/>
             </button>
@@ -266,25 +266,25 @@
     </div>
 
     {{-- Add row modal --}}
-    <x-modal name="add-row" title="Add a new row" max-width="max-w-xl">
+    <x-modal name="add-row" title="Tambah baris baru" max-width="max-w-xl">
         <form @submit.prevent="storeRow()" class="grid grid-cols-2 gap-4">
-            <div class="col-span-2"><label class="label">Name</label><input x-model="form.name" class="input"></div>
+            <div class="col-span-2"><label class="label">Nama</label><input x-model="form.name" class="input"></div>
             <div><label class="label">Username</label><input x-model="form.username" class="input"></div>
-            <div><label class="label">External ID</label><input x-model="form.external_id" class="input"></div>
+            <div><label class="label">ID eksternal</label><input x-model="form.external_id" class="input"></div>
             <div><label class="label">Platform</label><input x-model="form.platform" class="input" placeholder="instagram"></div>
-            <div><label class="label">Followers</label><input type="number" x-model.number="form.followers" class="input"></div>
-            <div><label class="label">Following</label><input type="number" x-model.number="form.following" class="input"></div>
-            <div><label class="label">Posts</label><input type="number" x-model.number="form.posts" class="input"></div>
+            <div><label class="label">Pengikut</label><input type="number" x-model.number="form.followers" class="input"></div>
+            <div><label class="label">Mengikuti</label><input type="number" x-model.number="form.following" class="input"></div>
+            <div><label class="label">Postingan</label><input type="number" x-model.number="form.posts" class="input"></div>
             <div><label class="label">Valid</label>
-                <select x-model.number="form.is_valid" class="input"><option value="1">Valid</option><option value="0">Invalid</option></select>
+                <select x-model.number="form.is_valid" class="input"><option value="1">Valid</option><option value="0">Tidak valid</option></select>
             </div>
-            <div><label class="label">Qualified</label>
-                <select x-model.number="form.is_qualified" class="input"><option value="1">Yes</option><option value="0">No</option></select>
+            <div><label class="label">Memenuhi syarat</label>
+                <select x-model.number="form.is_qualified" class="input"><option value="1">Ya</option><option value="0">Tidak</option></select>
             </div>
-            <div class="col-span-2"><label class="label">Profile URL</label><input x-model="form.profile_url" class="input"></div>
+            <div class="col-span-2"><label class="label">URL profil</label><input x-model="form.profile_url" class="input"></div>
             <div class="col-span-2 mt-2 flex justify-end gap-2">
                 <button type="button" @click="$dispatch('close-modal','add-row')" class="btn-outline">Batal</button>
-                <button class="btn-primary"><x-icon name="check" class="w-4 h-4"/> Save row</button>
+                <button class="btn-primary"><x-icon name="check" class="w-4 h-4"/> Simpan baris</button>
             </div>
         </form>
     </x-modal>
@@ -316,7 +316,7 @@ function datasetTable(cfg) {
                 const json = await res.json();
                 this.rows = json.data;
                 this.meta = json.meta;
-            } catch (e) { window.toast('Failed to load rows', 'error'); }
+            } catch (e) { window.toast('Gagal memuat data.', 'error'); }
             this.loading = false;
             this.selected = [];
         },
@@ -340,26 +340,26 @@ function datasetTable(cfg) {
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf(), 'Accept': 'application/json' },
                 body: JSON.stringify(this.edit),
             });
-            if (res.ok) { window.toast('Row updated'); this.edit = { id: null }; this.load(); }
-            else window.toast('Update failed', 'error');
+            if (res.ok) { window.toast('Baris diperbarui.'); this.edit = { id: null }; this.load(); }
+            else window.toast('Gagal memperbarui baris.', 'error');
         },
         async destroy(row) {
-            if (!confirm('Delete this row?')) return;
+            if (!confirm('Hapus baris ini?')) return;
             const res = await fetch(this.rowUrl + '/' + row.id, {
                 method: 'DELETE', headers: { 'X-CSRF-TOKEN': this.csrf(), 'Accept': 'application/json' },
             });
-            if (res.ok) { window.toast('Row deleted'); this.load(); }
-            else window.toast('Delete failed', 'error');
+            if (res.ok) { window.toast('Baris dihapus.'); this.load(); }
+            else window.toast('Gagal menghapus baris.', 'error');
         },
         async bulkDelete() {
-            if (!confirm(`Delete ${this.selected.length} selected rows?`)) return;
+            if (!confirm(`Hapus ${this.selected.length} baris terpilih?`)) return;
             const res = await fetch(this.bulkUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf(), 'Accept': 'application/json' },
                 body: JSON.stringify({ ids: this.selected }),
             });
-            if (res.ok) { const j = await res.json(); window.toast(`${j.deleted} rows deleted`); this.load(); }
-            else window.toast('Bulk delete failed', 'error');
+            if (res.ok) { const j = await res.json(); window.toast(`${j.deleted} baris dihapus.`); this.load(); }
+            else window.toast('Gagal menghapus baris terpilih.', 'error');
         },
         async storeRow() {
             const res = await fetch(this.storeUrl, {
@@ -368,11 +368,11 @@ function datasetTable(cfg) {
                 body: JSON.stringify(this.form),
             });
             if (res.ok) {
-                window.toast('Row added');
+                window.toast('Baris ditambahkan.');
                 this.$dispatch('close-modal', 'add-row');
                 this.form = { name: '', username: '', external_id: '', platform: '', followers: 0, following: 0, posts: 0, is_valid: 1, is_qualified: 0, profile_url: '' };
                 this.resetAndLoad();
-            } else window.toast('Could not add row (check fields)', 'error');
+            } else window.toast('Gagal menambah baris (periksa isian).', 'error');
         },
     };
 }

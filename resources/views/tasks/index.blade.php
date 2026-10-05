@@ -126,11 +126,11 @@
                 <span class="mx-1 hidden h-5 w-px bg-slate-200 sm:block dark:bg-white/10"></span>
 
                 <a href="{{ $jump(now()->startOfWeek(), now()->endOfWeek()) }}"
-                   class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5">
+                   class="inline-flex min-h-9 items-center rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5">
                     Minggu ini
                 </a>
                 <a href="{{ $jump(now()->startOfMonth(), now()->endOfMonth()) }}"
-                   class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5">
+                   class="inline-flex min-h-9 items-center rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5">
                     Bulan ini
                 </a>
             </div>

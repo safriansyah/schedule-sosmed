@@ -129,7 +129,7 @@
                  class="fixed inset-0 z-[95] flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="closeCrop()"></div>
 
-                <div class="card relative w-full max-w-3xl p-5 shadow-2xl">
+                <div class="card relative max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto p-5 shadow-2xl">
                     <div class="mb-3 flex items-center justify-between">
                         <p class="text-base font-semibold text-slate-800 dark:text-white">Sesuaikan Gambar</p>
                         <button type="button" @click="closeCrop()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">

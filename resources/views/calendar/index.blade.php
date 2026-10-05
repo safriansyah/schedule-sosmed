@@ -83,7 +83,7 @@
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0 scale-95 translate-y-2"
                      x-transition:enter-end="opacity-100 scale-100 translate-y-0"
-                     class="card relative w-full max-w-lg p-6 shadow-2xl">
+                     class="card relative max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto p-6 shadow-2xl">
 
                     <div class="mb-4 flex items-start justify-between gap-4">
                         <p class="text-base font-semibold text-slate-800 dark:text-white"
@@ -141,34 +141,42 @@
             </div>
         @endif
     </div>
-</x-layouts.app>
-
 @push('head')
 <style>
     /* Blend FullCalendar into the app's design tokens (incl. dark mode). */
     .fc-app { --fc-border-color: rgb(148 163 184 / 0.18); --fc-today-bg-color: rgb(139 92 246 / 0.07); }
-    .fc-app .fc-toolbar-title { font-size: 1rem; font-weight: 700; }
-    .fc-app .fc-button {
+    .fc-app.fc .fc-toolbar-title { font-size: 1rem; font-weight: 700; }
+    .fc-app.fc .fc-button {
         background: transparent; border: 1px solid rgb(148 163 184 / 0.3);
         color: inherit; font-size: .78rem; font-weight: 600;
         border-radius: .6rem; padding: .35rem .7rem; text-transform: capitalize;
         box-shadow: none;
     }
-    .fc-app .fc-button:hover { background: rgb(148 163 184 / 0.12); }
-    .fc-app .fc-button-active,
-    .fc-app .fc-button-primary:not(:disabled).fc-button-active {
+    .fc-app.fc .fc-button:hover { background: rgb(148 163 184 / 0.12); }
+    .fc-app.fc .fc-button-active,
+    .fc-app.fc .fc-button-primary:not(:disabled).fc-button-active {
         background: #7c3aed; border-color: #7c3aed; color: #fff;
     }
-    .fc-app .fc-daygrid-day-number,
-    .fc-app .fc-col-header-cell-cushion { color: inherit; text-decoration: none; font-size: .78rem; }
-    .fc-app .fc-event { border-radius: .45rem; padding: 1px 4px; font-size: .72rem; cursor: pointer; }
-    .fc-app .fc-event:hover { filter: brightness(1.08); }
-    .fc-app .fc-list-event:hover td { background: rgb(148 163 184 / 0.1); }
+    .fc-app.fc .fc-daygrid-day-number,
+    .fc-app.fc .fc-col-header-cell-cushion { color: inherit; text-decoration: none; font-size: .78rem; }
+    .fc-app.fc .fc-event { border-radius: .45rem; padding: 1px 4px; font-size: .72rem; cursor: pointer; }
+    .fc-app.fc .fc-event:hover { filter: brightness(1.08); }
+    .fc-app.fc .fc-list-event:hover td { background: rgb(148 163 184 / 0.1); }
 
-    /* Toolbar has to stack on small screens or it overflows. */
+    /* Toolbar has to stack on small screens or it overflows.
+       `.fc-app.fc`, not `.fc-app`: FullCalendar injects its own stylesheet at
+       runtime, AFTER this one, so a rule of equal weight lost every time and
+       the toolbar stayed one 399px row on a 360px phone. */
     @media (max-width: 640px) {
-        .fc-app .fc-toolbar { flex-direction: column; gap: .6rem; align-items: stretch; }
-        .fc-app .fc-toolbar-chunk { display: flex; justify-content: center; flex-wrap: wrap; gap: .3rem; }
+        .fc-app.fc .fc-toolbar { flex-direction: column; gap: .6rem; align-items: stretch; }
+        .fc-app.fc .fc-toolbar-chunk { display: flex; justify-content: center; flex-wrap: wrap; gap: .3rem; }
+        /* The four view buttons are one button-group, which never wraps on
+           its own. Let it share the full width instead. */
+        .fc-app.fc .fc-button-group { display: flex; flex-wrap: wrap; width: 100%; }
+        .fc-app.fc .fc-button-group > .fc-button { flex: 1 1 0; min-height: 36px; }
+        .fc-app.fc .fc-button { min-height: 36px; }
     }
 </style>
 @endpush
+</x-layouts.app>
+

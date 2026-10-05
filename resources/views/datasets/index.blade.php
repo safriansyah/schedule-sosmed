@@ -1,11 +1,11 @@
 @use('Illuminate\Support\Number')
 
-<x-layouts.app title="Datasets">
+<x-layouts.app title="Dataset">
     <x-slot:header>
         <div>
-            <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Datasets</h1>
+            <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Dataset</h1>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Upload JSON, then explore premium analytics per project.
+                Unggah file JSON, lalu jelajahi analitik lengkap per proyek.
             </p>
         </div>
     </x-slot:header>
@@ -23,7 +23,7 @@
 
             {{-- Dropzone --}}
             <div>
-                <label class="label">JSON file</label>
+                <label class="label">File JSON</label>
                 <div @dragover.prevent="dragging = true"
                      @dragleave.prevent="dragging = false"
                      @drop.prevent="dragging = false; pick($event.dataTransfer.files[0]); $refs.input.files = $event.dataTransfer.files"
@@ -34,10 +34,10 @@
                         <x-icon name="upload" class="w-6 h-6"/>
                     </span>
                     <p class="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200"
-                       x-text="file ? file.name : 'Drop your .json file here'"></p>
+                       x-text="file ? file.name : 'Letakkan file .json di sini'"></p>
                     <p class="mt-1 text-xs text-slate-400">
-                        or click to browse · up to {{ Number::fileSize(config('datasets.max_upload_kb') * 1024) }} ·
-                        array or <code class="rounded bg-slate-100 px-1 dark:bg-white/10">{ data: [...] }</code>
+                        atau klik untuk memilih · maks. {{ Number::fileSize(config('datasets.max_upload_kb') * 1024) }} ·
+                        array atau <code class="rounded bg-slate-100 px-1 dark:bg-white/10">{ data: [...] }</code>
                     </p>
                     <input x-ref="input" type="file" name="file" accept=".json,application/json"
                            class="hidden" @change="pick($event.target.files[0])" required>
@@ -48,20 +48,20 @@
             {{-- Meta --}}
             <div class="flex flex-col gap-4">
                 <div>
-                    <label class="label" for="name">Dataset name <span class="text-slate-400">(optional)</span></label>
+                    <label class="label" for="name">Nama dataset <span class="text-slate-400">(opsional)</span></label>
                     <input x-ref="name" id="name" name="name" class="input"
-                           placeholder="Auto from filename, e.g. 5000-hasil-ut-pkp" value="{{ old('name') }}">
+                           placeholder="Otomatis dari nama file, mis. 5000-hasil-ut-pkp" value="{{ old('name') }}">
                     @error('name') <p class="mt-2 text-sm text-rose-500">{{ $message }}</p> @enderror
                 </div>
                 <div class="rounded-xl bg-slate-50 p-3 text-xs text-slate-500 dark:bg-white/5 dark:text-slate-400">
                     <x-icon name="shield" class="mb-1 inline w-4 h-4 text-brand-500"/>
-                    Large files are streamed &amp; chunk-inserted on a queue — your browser never blocks.
+                    File besar dibaca bertahap &amp; disimpan per bagian melalui antrean — browser Anda tidak akan tertahan.
                 </div>
                 <button class="btn-primary" :disabled="!file || busy">
                     <span x-show="!busy" class="inline-flex items-center gap-2">
-                        <x-icon name="sparkles" class="w-4 h-4"/> Create dataset
+                        <x-icon name="sparkles" class="w-4 h-4"/> Buat dataset
                     </span>
-                    <span x-show="busy">Uploading…</span>
+                    <span x-show="busy">Mengunggah…</span>
                 </button>
             </div>
         </form>
@@ -71,15 +71,15 @@
     <form method="GET" class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div class="relative flex-1">
             <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400"/>
-            <input name="q" value="{{ request('q') }}" class="input pl-10" placeholder="Search datasets…">
+            <input name="q" value="{{ request('q') }}" class="input pl-10" placeholder="Cari dataset…">
         </div>
         <select name="status" class="input sm:w-48" onchange="this.form.submit()">
-            <option value="">All statuses</option>
-            @foreach (['completed','processing','pending','failed'] as $s)
-                <option value="{{ $s }}" @selected(request('status') === $s)>{{ ucfirst($s) }}</option>
+            <option value="">Semua status</option>
+            @foreach (['completed' => 'Selesai', 'processing' => 'Diproses', 'pending' => 'Menunggu', 'failed' => 'Gagal'] as $s => $statusLabel)
+                <option value="{{ $s }}" @selected(request('status') === $s)>{{ $statusLabel }}</option>
             @endforeach
         </select>
-        <button class="btn-outline">Filter</button>
+        <button class="btn-outline">Terapkan</button>
     </form>
 
     {{-- Grid --}}
@@ -108,7 +108,7 @@
                                     }, 2500);
                                 }">
                             <div class="flex justify-between text-xs text-slate-400">
-                                <span>Importing…</span><span x-text="p + '%'"></span>
+                                <span>Mengimpor…</span><span x-text="p + '%'"></span>
                             </div>
                             <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
                                 <div class="h-full rounded-full bg-brand-500 transition-all duration-500"
@@ -119,7 +119,7 @@
                         <div class="mt-5 grid grid-cols-3 gap-2 text-center">
                             <div class="rounded-xl bg-slate-50 py-2.5 dark:bg-white/5">
                                 <p class="text-lg font-bold text-slate-800 dark:text-white">{{ Number::abbreviate($d->total_rows) }}</p>
-                                <p class="text-[11px] text-slate-400">Rows</p>
+                                <p class="text-[11px] text-slate-400">Baris</p>
                             </div>
                             <div class="rounded-xl bg-slate-50 py-2.5 dark:bg-white/5">
                                 <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400">{{ Number::abbreviate($d->valid_count) }}</p>
@@ -127,27 +127,27 @@
                             </div>
                             <div class="rounded-xl bg-slate-50 py-2.5 dark:bg-white/5">
                                 <p class="text-lg font-bold text-amber-600 dark:text-amber-400">{{ Number::abbreviate($d->qualified_count) }}</p>
-                                <p class="text-[11px] text-slate-400">Qualified</p>
+                                <p class="text-[11px] text-slate-400">Memenuhi syarat</p>
                             </div>
                         </div>
                     @endif
 
                     <div class="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-white/5">
                         <p class="text-xs text-slate-400">
-                            {{ $d->creator?->name ?? 'System' }} · {{ $d->created_at->diffForHumans() }}
+                            {{ $d->creator?->name ?? 'Sistem' }} · {{ $d->created_at->diffForHumans() }}
                         </p>
                         <div class="flex items-center gap-1">
-                            <a href="{{ route('datasets.show', $d) }}" class="btn-ghost !px-2 !py-1.5" title="Open">
+                            <a href="{{ route('datasets.show', $d) }}" class="btn-ghost !px-2 !py-1.5" title="Buka">
                                 <x-icon name="eye" class="w-4 h-4"/>
                             </a>
                             <button type="button" @click="$dispatch('open-modal','rename-dataset-{{ $d->id }}')"
-                                    class="btn-ghost !px-2 !py-1.5" title="Rename">
+                                    class="btn-ghost !px-2 !py-1.5" title="Ganti nama">
                                 <x-icon name="edit" class="w-4 h-4"/>
                             </button>
                             <form method="POST" action="{{ route('datasets.destroy', $d) }}"
-                                  onsubmit="return confirm('Delete “{{ $d->name }}” and all its data? This cannot be undone.')">
+                                  onsubmit="return confirm('Hapus “{{ $d->name }}” beserta seluruh datanya? Tindakan ini tidak dapat dibatalkan.')">
                                 @csrf @method('DELETE')
-                                <button class="btn-ghost !px-2 !py-1.5 text-rose-500" title="Delete">
+                                <button class="btn-ghost !px-2 !py-1.5 text-rose-500" title="Hapus">
                                     <x-icon name="trash" class="w-4 h-4"/>
                                 </button>
                             </form>
@@ -162,33 +162,33 @@
         {{-- Rename modals — rendered at page level (outside the cards, whose
              hover transform would otherwise break the fixed-position modal) --}}
         @foreach ($datasets as $d)
-            <x-modal name="rename-dataset-{{ $d->id }}" title="Rename dataset">
+            <x-modal name="rename-dataset-{{ $d->id }}" title="Ganti nama dataset">
                 <form method="POST" action="{{ route('datasets.update', $d) }}" class="space-y-4">
                     @csrf @method('PUT')
                     <div>
-                        <label class="label">Dataset name</label>
+                        <label class="label">Nama dataset</label>
                         <input name="name" class="input" required
                                value="{{ $d->name }}" maxlength="120">
                         <p class="mt-1.5 text-xs text-slate-400">
-                            Only the display name changes — the dataset URL stays the same.
+                            Hanya nama tampilan yang berubah — URL dataset tetap sama.
                         </p>
                     </div>
                     <div>
-                        <label class="label">Description <span class="text-slate-400">(optional)</span></label>
+                        <label class="label">Deskripsi <span class="text-slate-400">(opsional)</span></label>
                         <input name="description" class="input" maxlength="255"
-                               value="{{ $d->description }}" placeholder="Short note about this dataset">
+                               value="{{ $d->description }}" placeholder="Catatan singkat tentang dataset ini">
                     </div>
                     <div class="flex justify-end gap-2 pt-2">
                         <button type="button" @click="$dispatch('close-modal','rename-dataset-{{ $d->id }}')" class="btn-outline">Batal</button>
-                        <button class="btn-primary"><x-icon name="check" class="w-4 h-4"/> Save name</button>
+                        <button class="btn-primary"><x-icon name="check" class="w-4 h-4"/> Simpan nama</button>
                     </div>
                 </form>
             </x-modal>
         @endforeach
     @else
         <div class="mt-6">
-            <x-empty-state icon="layers" title="No datasets yet"
-                           desc="Upload your first JSON file above to generate a premium analytics dashboard automatically." />
+            <x-empty-state icon="layers" title="Belum ada dataset"
+                           desc="Unggah file JSON pertama Anda di atas untuk membuat dasbor analitik secara otomatis." />
         </div>
     @endif
 </x-layouts.app>

@@ -31,8 +31,8 @@ class StoreDatasetRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'file.max' => 'The JSON file may not be larger than :max KB.',
-            'file.mimes' => 'Only .json files are accepted.',
+            'file.max' => 'Ukuran berkas JSON maksimal :max KB.',
+            'file.mimes' => 'Hanya berkas .json yang diterima.',
         ];
     }
 
@@ -42,7 +42,7 @@ class StoreDatasetRequest extends FormRequest
     protected function assertLooksLikeJson(mixed $value, Closure $fail): void
     {
         if (! $value || ! $value->isValid()) {
-            $fail('The uploaded file is invalid.');
+            $fail('Berkas yang diunggah tidak valid.');
 
             return;
         }
@@ -50,7 +50,7 @@ class StoreDatasetRequest extends FormRequest
         $head = ltrim((string) file_get_contents($value->getRealPath(), false, null, 0, 64));
 
         if ($head === '' || ($head[0] !== '[' && $head[0] !== '{')) {
-            $fail('The file does not appear to contain valid JSON (expected an array or object).');
+            $fail('Isi berkas bukan JSON yang valid (harus berupa array atau objek).');
         }
     }
 }

@@ -121,6 +121,11 @@ Alpine.data('contentCalendar', ({ eventsUrl, moveUrl, noteUrl, canNote = false, 
                 today: 'Hari ini', month: 'Bulan', week: 'Minggu', day: 'Hari', list: 'Agenda',
             },
             locale: 'id',
+            // Only the button labels above come translated; the empty agenda
+            // otherwise reads "No events to display".
+            noEventsText: 'Tidak ada jadwal pada rentang ini.',
+            allDayText: 'Sepanjang hari',
+            moreLinkText: (n) => `+${n} lagi`,
             firstDay: 1,
             height: 'auto',
             nowIndicator: true,
@@ -259,5 +264,64 @@ Alpine.data('contentCalendar', ({ eventsUrl, moveUrl, noteUrl, canNote = false, 
         }
     },
 }));
+
+/* ---------------------------------------------------------------------------
+ | Double-submit guard — every form that changes something
+ |
+ | A second click on "Simpan" while the first request is still travelling
+ | used to send the form twice. Once a POST/PUT/DELETE form has really been
+ | submitted (not stopped by a confirm() or @submit.prevent), its submit
+ | buttons are disabled and the one clicked shows a spinner.
+ |
+ | Disabled one tick LATER, not during the submit event: a disabled
+ | submitter is left out of the form data, and buttons such as the inbox's
+ | name="action" value="close" carry the very value the server acts on.
+ |
+ | Opt out with data-no-submit-guard (forms that stay on the page).
+ * ------------------------------------------------------------------------- */
+const SPINNER = '<svg class="submit-spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
+
+function releaseForm(form) {
+    form.removeAttribute('aria-busy');
+    form.querySelectorAll('[data-submit-locked]').forEach((button) => {
+        button.disabled = false;
+        button.removeAttribute('data-submit-locked');
+        button.querySelector('.submit-spinner')?.remove();
+    });
+}
+
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+
+    if (!(form instanceof HTMLFormElement) || form.hasAttribute('data-no-submit-guard')) return;
+    if ((form.getAttribute('method') || 'get').toLowerCase() !== 'post') return;
+
+    // A form already on its way: a second submit is the double click itself.
+    if (form.getAttribute('aria-busy') === 'true') {
+        event.preventDefault();
+        return;
+    }
+
+    setTimeout(() => {
+        if (event.defaultPrevented) return;
+
+        form.setAttribute('aria-busy', 'true');
+        form.querySelectorAll('button:not([type=button]), input[type=submit]').forEach((button) => {
+            if (button.disabled) return;
+            button.disabled = true;
+            button.setAttribute('data-submit-locked', '');
+            if (button === event.submitter && button.tagName === 'BUTTON') button.insertAdjacentHTML('afterbegin', SPINNER);
+        });
+
+        // A response that never navigates (a file download, a cancelled
+        // request) must not leave the form locked for good.
+        setTimeout(() => releaseForm(form), 15000);
+    }, 0);
+});
+
+// Back button restores the page from cache with the buttons still locked.
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) document.querySelectorAll('form[aria-busy="true"]').forEach(releaseForm);
+});
 
 Alpine.start();

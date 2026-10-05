@@ -1,13 +1,13 @@
 <header class="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-white/[0.06] dark:bg-ink-950/80 sm:px-6 lg:px-8">
 
     {{-- Mobile drawer toggle --}}
-    <button @click="$store.ui.sidebarOpen = true"
+    <button type="button" @click="$store.ui.sidebarOpen = true"
             class="btn-ghost -ml-2 !px-2 lg:hidden" aria-label="Buka menu">
         <x-icon name="menu" class="h-5 w-5"/>
     </button>
 
     {{-- Desktop compact toggle --}}
-    <button @click="$store.ui.toggleCollapsed()"
+    <button type="button" @click="$store.ui.toggleCollapsed()"
             class="btn-ghost -ml-2 hidden !px-2 lg:inline-flex" aria-label="Ciutkan sidebar">
         <x-icon name="menu" class="h-5 w-5"/>
     </button>
@@ -20,7 +20,7 @@
 
     <div class="ml-auto flex items-center gap-2">
         {{-- Theme toggle --}}
-        <button @click="$store.theme.toggle()"
+        <button type="button" @click="$store.theme.toggle()"
                 class="btn-ghost relative !px-2.5" aria-label="Ganti tema">
             <x-icon name="sun" class="h-5 w-5" x-show="$store.theme.dark"/>
             <x-icon name="moon" class="h-5 w-5" x-show="!$store.theme.dark"/>
@@ -28,7 +28,7 @@
 
         {{-- Profile menu --}}
         <div x-data="{ open: false }" class="relative">
-            <button @click="open = !open" @click.outside="open = false"
+            <button type="button" @click="open = !open" @click.outside="open = false"
                     class="flex items-center gap-2 rounded-xl px-2 py-1.5 transition hover:bg-slate-100 dark:hover:bg-white/5">
                 <span class="avatar h-8 w-8 text-sm">{{ auth()->user()->initial() }}</span>
                 <x-icon name="chevron-down" class="hidden h-4 w-4 text-slate-400 sm:block"/>

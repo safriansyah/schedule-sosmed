@@ -24,13 +24,13 @@ class ReplaceDatasetRequest extends FormRequest
                 'mimetypes:application/json,text/plain,text/json',
                 function (string $attr, mixed $value, Closure $fail) {
                     if (! $value || ! $value->isValid()) {
-                        $fail('The uploaded file is invalid.');
+                        $fail('Berkas yang diunggah tidak valid.');
 
                         return;
                     }
                     $head = ltrim((string) file_get_contents($value->getRealPath(), false, null, 0, 64));
                     if ($head === '' || ($head[0] !== '[' && $head[0] !== '{')) {
-                        $fail('The file does not appear to contain valid JSON.');
+                        $fail('Isi berkas bukan JSON yang valid.');
                     }
                 },
             ],

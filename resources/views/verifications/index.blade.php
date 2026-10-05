@@ -49,7 +49,7 @@
                 </div>
 
                 @can('decideVerification', $content)
-                    <button @click="open = true" class="btn-primary btn-sm shrink-0 self-start">
+                    <button type="button" @click="open = true" class="btn-primary btn-sm shrink-0 self-start">
                         <x-icon name="badge-check" class="h-3.5 w-3.5"/> Beri Keputusan
                     </button>
                 @else

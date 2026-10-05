@@ -39,7 +39,7 @@ class DatasetImportService
         ]);
         $dataset->save();
 
-        $this->logger->log('dataset.created', "Created dataset “{$dataset->name}”", $dataset, [
+        $this->logger->log('dataset.created', "Membuat dataset “{$dataset->name}”", $dataset, [
             'source' => $dataset->source_filename,
         ]);
 
@@ -65,7 +65,7 @@ class DatasetImportService
             'error_message' => null,
         ])->save();
 
-        $this->logger->log('dataset.replaced', "Replaced data for “{$dataset->name}”", $dataset);
+        $this->logger->log('dataset.replaced', "Mengganti data “{$dataset->name}”", $dataset);
 
         $this->dispatchImport($dataset);
 
@@ -81,7 +81,7 @@ class DatasetImportService
         $path = Storage::disk($this->disk())->path($dataset->source_path);
 
         if (! is_file($path)) {
-            $this->fail($dataset, 'Source file is missing on disk.');
+            $this->fail($dataset, 'File sumber tidak ditemukan di server.');
 
             return;
         }
@@ -153,7 +153,7 @@ class DatasetImportService
                 'error_message' => null,
             ])->save(); // save() bumps updated_at → busts analytics cache
 
-            $this->logger->log('dataset.imported', "Imported {$processed} rows into “{$dataset->name}”", $dataset, [
+            $this->logger->log('dataset.imported', "Mengimpor {$processed} baris ke “{$dataset->name}”", $dataset, [
                 'rows' => $processed,
                 'valid' => $valid,
                 'qualified' => $qualified,
@@ -171,7 +171,7 @@ class DatasetImportService
             'error_message' => Str::limit($message, 1000),
         ])->save();
 
-        $this->logger->log('dataset.failed', "Import failed for “{$dataset->name}”", $dataset, [
+        $this->logger->log('dataset.failed', "Impor “{$dataset->name}” gagal", $dataset, [
             'error' => Str::limit($message, 300),
         ]);
     }

@@ -55,7 +55,7 @@ class DatasetController extends Controller
 
         return redirect()
             ->route('datasets.show', $dataset)
-            ->with('toast', ['type' => 'success', 'message' => "Dataset “{$dataset->name}” is being processed."]);
+            ->with('toast', ['type' => 'success', 'message' => "Dataset “{$dataset->name}” sedang diproses."]);
     }
 
     public function show(Dataset $dataset): View
@@ -117,7 +117,7 @@ class DatasetController extends Controller
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => 'Dataset is being replaced and processed.',
+            'message' => 'Data dataset sedang diganti dan diproses.',
         ]);
     }
 
@@ -132,14 +132,14 @@ class DatasetController extends Controller
 
         $this->logger->log(
             'dataset.renamed',
-            "Renamed dataset “{$old}” → “{$dataset->name}”",
+            "Mengganti nama dataset “{$old}” → “{$dataset->name}”",
             $dataset,
             ['from' => $old, 'to' => $dataset->name],
         );
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "Dataset renamed to “{$dataset->name}”.",
+            'message' => "Nama dataset diubah menjadi “{$dataset->name}”.",
         ]);
     }
 
@@ -155,11 +155,11 @@ class DatasetController extends Controller
 
         $dataset->delete(); // dataset_items cascade at the DB level
 
-        $this->logger->log('dataset.deleted', "Deleted dataset “{$name}”", null, ['name' => $name]);
+        $this->logger->log('dataset.deleted', "Menghapus dataset “{$name}”", null, ['name' => $name]);
 
         return redirect()
             ->route('datasets.index')
-            ->with('toast', ['type' => 'success', 'message' => "Dataset “{$name}” deleted."]);
+            ->with('toast', ['type' => 'success', 'message' => "Dataset “{$name}” dihapus."]);
     }
 
     /**
@@ -178,7 +178,7 @@ class DatasetController extends Controller
         $rows = $this->items->query($dataset, $filters)->toBase()->lazy(2000);
         $filename = "{$dataset->slug}-export.{$format}";
 
-        $this->logger->log('dataset.exported', "Exported “{$dataset->name}” ({$format})", $dataset);
+        $this->logger->log('dataset.exported', "Mengekspor “{$dataset->name}” ({$format})", $dataset);
 
         if ($format === 'json') {
             return response()->streamDownload(function () use ($rows) {

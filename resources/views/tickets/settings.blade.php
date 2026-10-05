@@ -104,7 +104,7 @@
                                 </label>
 
                                 <button type="button" @click="remove(i)" x-show="rows.length > 1"
-                                        class="text-slate-400 transition hover:text-rose-500" title="Hapus format">
+                                        class="-m-1.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-500/10 hover:text-rose-500" title="Hapus format" aria-label="Hapus format">
                                     <x-icon name="trash" class="h-4 w-4"/>
                                 </button>
                             </div>

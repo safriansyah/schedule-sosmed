@@ -57,7 +57,7 @@
 
                 {{-- Actions — only for users who may actually decide --}}
                 @can('decideApproval', $content)
-                    <button @click="open = true" class="btn-primary btn-sm shrink-0 self-start">
+                    <button type="button" @click="open = true" class="btn-primary btn-sm shrink-0 self-start">
                         <x-icon name="check-circle" class="h-3.5 w-3.5"/> Beri Keputusan
                     </button>
                 @else

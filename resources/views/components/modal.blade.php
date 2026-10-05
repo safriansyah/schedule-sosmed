@@ -33,12 +33,13 @@
          x-transition:leave="transition ease-in duration-150"
          x-transition:leave-start="opacity-100 scale-100"
          x-transition:leave-end="opacity-0 scale-95"
-         class="card relative w-full {{ $widths[$maxWidth] ?? $widths['lg'] }} p-6 shadow-2xl">
+         class="card relative max-h-[calc(100dvh-2rem)] w-full overflow-y-auto {{ $widths[$maxWidth] ?? $widths['lg'] }} p-6 shadow-2xl">
 
         @if ($title)
             <div class="mb-4 flex items-start justify-between gap-4">
                 <p class="text-base font-semibold text-slate-800 dark:text-white">{{ $title }}</p>
-                <button @click="open = false" class="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200">
+                <button type="button" @click="open = false" aria-label="Tutup"
+                        class="-m-2 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/5 dark:hover:text-slate-200">
                     <x-icon name="x" class="h-5 w-5"/>
                 </button>
             </div>

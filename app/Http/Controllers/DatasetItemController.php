@@ -22,7 +22,7 @@ class DatasetItemController extends Controller
         $item = $dataset->items()->create($request->validated());
 
         $this->recount($dataset);
-        $this->logger->log('item.created', "Added a row to “{$dataset->name}”", $dataset, ['item_id' => $item->id]);
+        $this->logger->log('item.created', "Menambah baris di “{$dataset->name}”", $dataset, ['item_id' => $item->id]);
 
         return response()->json(['ok' => true, 'item' => $item], 201);
     }
@@ -34,7 +34,7 @@ class DatasetItemController extends Controller
         $item->update($request->validated());
 
         $this->recount($dataset);
-        $this->logger->log('item.updated', "Edited a row in “{$dataset->name}”", $dataset, ['item_id' => $item->id]);
+        $this->logger->log('item.updated', "Mengubah baris di “{$dataset->name}”", $dataset, ['item_id' => $item->id]);
 
         return response()->json(['ok' => true, 'item' => $item->fresh()]);
     }
@@ -48,7 +48,7 @@ class DatasetItemController extends Controller
         $item->delete();
 
         $this->recount($dataset);
-        $this->logger->log('item.deleted', "Deleted a row from “{$dataset->name}”", $dataset, ['item_id' => $item->id]);
+        $this->logger->log('item.deleted', "Menghapus baris dari “{$dataset->name}”", $dataset, ['item_id' => $item->id]);
 
         return response()->json(['ok' => true]);
     }
@@ -61,14 +61,14 @@ class DatasetItemController extends Controller
             ->map(fn ($v) => (int) $v)->filter()->take(5000)->all();
 
         if (empty($ids)) {
-            return response()->json(['ok' => false, 'message' => 'No rows selected.'], 422);
+            return response()->json(['ok' => false, 'message' => 'Tidak ada baris yang dipilih.'], 422);
         }
 
         $deleted = DatasetItem::where('dataset_id', $dataset->id)
             ->whereIn('id', $ids)->delete();
 
         $this->recount($dataset);
-        $this->logger->log('item.bulk_deleted', "Bulk-deleted {$deleted} rows from “{$dataset->name}”", $dataset, [
+        $this->logger->log('item.bulk_deleted', "Menghapus {$deleted} baris sekaligus dari “{$dataset->name}”", $dataset, [
             'count' => $deleted,
         ]);
 

@@ -86,11 +86,37 @@
         textarea {
             font-size: 16px !important;
         }
+
+        /* Fingers, not cursors: buttons at least ~40px tall, small ones
+           ~34px, so nothing needs a second try to hit. */
+        .btn, .btn-primary, .btn-outline, .btn-ghost, .btn-danger, .btn-success { min-height: 40px; }
+        .btn-sm { min-height: 34px; }
     }
     body {
         @apply bg-slate-50 text-slate-700 antialiased;
         @apply dark:bg-ink-950 dark:text-slate-300;
+        /* A long unbroken string (URL, username, NIM list) wraps instead of
+           pushing its card off the screen. break-word, not anywhere: it only
+           breaks a word that would otherwise overflow, so table columns keep
+           their natural width. */
+        overflow-wrap: break-word;
     }
+
+    /* A scroll container must also contain its absolutely positioned
+       children. Without this, a screen-reader-only label in a wide table
+       header (.sr-only is position:absolute) escaped the table's scroller
+       and stretched the whole page sideways on /tasks. */
+    .overflow-x-auto, .overflow-auto { position: relative; }
+
+    /* Double-submit guard (resources/js/app.js) */
+    .submit-spinner {
+        width: 1em;
+        height: 1em;
+        flex-shrink: 0;
+        animation: submit-spin 0.8s linear infinite;
+    }
+    [data-submit-locked] { cursor: progress; }
+    @keyframes submit-spin { to { transform: rotate(360deg); } }
     [x-cloak] { display: none !important; }
 
     /* A grid with no column count for phones ("grid lg:grid-cols-3") gets

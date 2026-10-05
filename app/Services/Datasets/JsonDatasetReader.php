@@ -101,7 +101,7 @@ class JsonDatasetReader
         $head = ltrim((string) file_get_contents($path, false, null, 0, 8192));
 
         if ($head === '') {
-            throw new RuntimeException('The uploaded JSON file is empty.');
+            throw new RuntimeException('File JSON yang diunggah kosong.');
         }
 
         if ($head[0] === '[') {
@@ -116,11 +116,11 @@ class JsonDatasetReader
             }
 
             throw new RuntimeException(
-                'Could not locate a data array in the JSON. Expected a top-level array '
-                .'or an object containing one of: '.implode(', ', self::ARRAY_KEYS).'.'
+                'Array data tidak ditemukan di dalam JSON. Harus berupa array di tingkat teratas '
+                .'atau objek yang berisi salah satu kunci: '.implode(', ', self::ARRAY_KEYS).'.'
             );
         }
 
-        throw new RuntimeException('The file does not contain a JSON array or object.');
+        throw new RuntimeException('File tidak berisi array atau objek JSON.');
     }
 }

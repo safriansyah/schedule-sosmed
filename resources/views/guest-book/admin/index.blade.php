@@ -30,7 +30,7 @@
             <div class="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-white/5">
                 @foreach (['active' => 'Aktif', 'finished' => 'Selesai & tiket', 'all' => 'Semua'] as $key => $label)
                     <button type="button" @click="query.filter = '{{ $key }}'; refresh()"
-                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                            class="min-h-9 rounded-lg px-3 py-2 text-xs font-semibold transition"
                             :class="query.filter === '{{ $key }}' ? 'bg-white text-brand-700 shadow-sm dark:bg-ink-850 dark:text-brand-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'">
                         {{ $label }}
                     </button>

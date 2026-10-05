@@ -78,7 +78,7 @@
 
             <p class="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200" x-text="t.message"></p>
 
-            <button @click="$store.toasts.remove(t.id)"
+            <button type="button" @click="$store.toasts.remove(t.id)"
                     class="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200">
                 <x-icon name="x" class="h-4 w-4"/>
             </button>
