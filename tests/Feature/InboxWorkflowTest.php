@@ -227,6 +227,11 @@ it('stops counting a breach once someone has responded', function () {
 });
 
 it('reports response time as a median so one late reply cannot skew it', function () {
+    // Only this test's replies count: the real inbox answers in the same
+    // window would otherwise set the median. Cleared inside the transaction,
+    // so nothing real changes.
+    Interaction::query()->update(['first_response_at' => null]);
+
     // Three answered within an hour, one answered a fortnight later.
     foreach ([1, 1, 1, 336] as $hours) {
         inboxItem([
