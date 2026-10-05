@@ -130,7 +130,7 @@ class TicketService
 
             $ticket = Ticket::createWithNumber([
                 'source' => TicketSource::GuestBook->value,
-                'subject' => "Antrian {$locked->displayNumber()} — {$locked->service->label()}",
+                'subject' => "Antrian {$locked->displayNumber()} — {$locked->serviceLabel()}",
                 'description' => $locked->description,
                 'status' => TicketStatus::Open->value,
                 'priority' => 'normal',
@@ -146,6 +146,7 @@ class TicketService
                         'queue_number' => $locked->displayNumber(),
                         'whatsapp' => $locked->whatsapp,
                         'gender' => $locked->gender->label(),
+                        'type' => $locked->service->typeLabel(),
                         'service' => $locked->service->label(),
                     ],
                 ],

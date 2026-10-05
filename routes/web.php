@@ -284,7 +284,9 @@ Route::middleware('auth')->group(function () {
     */
     Route::get('antrian', [GuestBookController::class, 'index'])->name('guest-book.admin.index');
     Route::get('antrian/rows', [GuestBookController::class, 'rows'])->name('guest-book.admin.rows');
+    Route::get('antrian/export', [GuestBookController::class, 'export'])->name('guest-book.admin.export');
     Route::post('antrian/{entry}/status', [GuestBookController::class, 'status'])->name('guest-book.admin.status');
+    Route::post('antrian/{entry}/complete', [GuestBookController::class, 'complete'])->name('guest-book.admin.complete');
     Route::post('antrian/{entry}/ticket', [GuestBookController::class, 'ticket'])->name('guest-book.admin.ticket');
     Route::get('antrian/{entry}/paraf', [GuestBookController::class, 'signature'])->name('guest-book.admin.signature');
 

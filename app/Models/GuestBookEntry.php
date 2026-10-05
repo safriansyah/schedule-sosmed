@@ -81,6 +81,49 @@ class GuestBookEntry extends Model
         return $this->belongsTo(User::class, 'handled_by');
     }
 
+    /** The operator who finished the service (chosen in the "Selesai" form). */
+    public function completer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'completed_by');
+    }
+
+    /**
+     * Everything the detail and "Selesai" modals show, as plain values — the
+     * page builds its modals from this rather than from markup in each row.
+     *
+     * @return array<string, mixed>
+     */
+    public function adminPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'number' => $this->displayNumber(),
+            'date' => $this->queue_date->translatedFormat('d M Y'),
+            'name' => $this->name,
+            'nim' => $this->nim,
+            'gender' => $this->gender->label(),
+            'whatsapp' => \App\Support\PhoneNumber::pretty($this->whatsapp) ?? $this->whatsapp,
+            'phone' => \App\Support\PhoneNumber::pretty($this->phone) ?? $this->phone,
+            'type' => $this->service->typeLabel(),
+            'service' => $this->service->label(),
+            'description' => $this->description,
+            'status' => $this->status->label(),
+            'registered_at' => $this->created_at->timezone('Asia/Jakarta')->format('H:i'),
+            'called_at' => $this->called_at?->timezone('Asia/Jakarta')->format('H:i'),
+            'finished_at' => $this->finished_at?->timezone('Asia/Jakarta')->translatedFormat('d M Y, H:i'),
+            'process' => \App\Enums\GuestBookCompletion::processLabel($this->service_process),
+            'resolution' => \App\Enums\GuestBookCompletion::resolutionLabel($this->resolution),
+            'completed_by' => $this->completer?->name,
+            'completion_note' => $this->completion_note,
+            'handler' => $this->handler?->name,
+            'ticket' => $this->ticket?->number,
+            'ticket_url' => $this->ticket ? route('tickets.show', $this->ticket) : null,
+            'signature_url' => $this->signature_path ? route('guest-book.admin.signature', $this) : null,
+            'complete_url' => route('guest-book.admin.complete', $this),
+            'ticket_create_url' => route('guest-book.admin.ticket', $this),
+        ];
+    }
+
     /** Entries of today's queue (WIB). */
     public function scopeToday(Builder $query): Builder
     {
@@ -91,6 +134,20 @@ class GuestBookEntry extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereIn('status', array_map(fn ($s) => $s->value, GuestBookStatus::active()));
+    }
+
+    /**
+     * The service as a single readable phrase: "Legalisir Ijazah",
+     * "Keluhan: Permasalahan Nilai", "Layanan Lainnya". A bare "Lainnya"
+     * would not say which of the two groups it came from.
+     */
+    public function serviceLabel(): string
+    {
+        return match (true) {
+            $this->service === GuestBookService::LayananLainnya => 'Layanan Lainnya',
+            $this->service->type() === GuestBookService::TYPE_COMPLAINT => 'Keluhan: '.$this->service->label(),
+            default => $this->service->label(),
+        };
     }
 
     /** "007" — what is printed on the screen and read out. */
@@ -129,7 +186,7 @@ class GuestBookEntry extends Model
         return [
             'number' => $this->displayNumber(),
             'name' => $this->publicName(),
-            'service' => $this->service->label(),
+            'service' => $this->serviceLabel(),
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
         ];

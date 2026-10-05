@@ -33,7 +33,8 @@ class PublicGuestBookController extends Controller
     public function create(): View
     {
         return view('guest-book.form', [
-            'services' => GuestBookService::options(),
+            'types' => GuestBookService::types(),
+            'serviceGroups' => GuestBookService::grouped(),
             'genders' => Gender::options(),
         ]);
     }
@@ -53,12 +54,17 @@ class PublicGuestBookController extends Controller
             'nim' => ['nullable', 'string', 'max:20', 'regex:/^[0-9A-Za-z.\-]+$/'],
             'gender' => ['required', Rule::enum(Gender::class)],
             'service' => ['required', Rule::enum(GuestBookService::class)],
-            'description' => ['nullable', 'string', 'max:2000'],
+            // "Lainnya" says nothing by itself: the description has to.
+            'description' => [
+                Rule::requiredIf(fn () => GuestBookService::tryFrom((string) $request->input('service'))?->isOther() ?? false),
+                'nullable', 'string', 'max:2000',
+            ],
             'signature' => ['required', 'string', 'starts_with:data:image/png;base64,', 'max:'.(int) ceil(self::MAX_SIGNATURE_BYTES * 1.4)],
         ], [
             'signature.required' => 'Paraf wajib diisi — gambar paraf Anda pada kotak yang tersedia.',
             'signature.*' => 'Paraf tidak terbaca. Hapus lalu gambar ulang paraf Anda.',
             'nim.regex' => 'NIM hanya boleh berisi angka/huruf.',
+            'description.required' => 'Untuk pilihan "Lainnya", jelaskan keperluan atau keluhan Anda pada Deskripsi.',
         ], [
             'whatsapp' => 'No. WhatsApp',
             'phone' => 'No. HP',

@@ -118,7 +118,7 @@
 
                     <div class="flex flex-wrap gap-4">
                         <dl class="grid min-w-0 flex-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                            <div><dt class="text-xs text-slate-400">Jenis layanan</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ $entry->service->label() }}</dd></div>
+                            <div><dt class="text-xs text-slate-400">Jenis kunjungan / layanan</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ $entry->serviceLabel() }}</dd></div>
                             <div><dt class="text-xs text-slate-400">Jenis kelamin</dt><dd class="text-slate-700 dark:text-slate-200">{{ $entry->gender->label() }}</dd></div>
                             <div>
                                 <dt class="text-xs text-slate-400">No. WhatsApp</dt>

@@ -19,7 +19,7 @@
                 </div>
                 <div class="rounded-2xl bg-slate-50 p-3 dark:bg-white/5">
                     <dt class="text-xs text-slate-400">Layanan</dt>
-                    <dd class="font-semibold text-slate-800 dark:text-white">{{ $entry->service->label() }}</dd>
+                    <dd class="font-semibold text-slate-800 dark:text-white">{{ $entry->serviceLabel() }}</dd>
                 </div>
             </dl>
 

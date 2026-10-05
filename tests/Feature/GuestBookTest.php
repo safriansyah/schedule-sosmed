@@ -130,7 +130,13 @@ it('moves an entry through the queue, and the monitor follows', function () {
     $feed = $this->getJson(route('guest-book.monitor.feed'))->json();
     expect(collect($feed['now'])->pluck('number'))->toContain($entry->displayNumber());
 
-    $this->actingAs($operator)->postJson(route('guest-book.admin.status', $entry), ['status' => 'done'])->assertOk();
+    // "Selesai" only through its form, never as a bare status change.
+    $this->actingAs($operator)->postJson(route('guest-book.admin.status', $entry), ['status' => 'done'])
+        ->assertUnprocessable();
+
+    $this->actingAs($operator)->postJson(route('guest-book.admin.complete', $entry), [
+        'service_process' => 'langsung', 'resolution' => 'langsung', 'completed_by' => $operator->id,
+    ])->assertOk();
 
     $feed = $this->getJson(route('guest-book.monitor.feed'))->json();
     expect(collect($feed['now'])->merge($feed['waiting'])->pluck('number'))->not->toContain($entry->displayNumber());
@@ -159,7 +165,8 @@ it('turns an entry into exactly one ticket with source Buku Tamu', function () {
         ->and($ticket->source)->toBe(TicketSource::GuestBook)
         ->and($ticket->requester_name)->toBe('Ahmad Fauzan Ramadhan')
         ->and($ticket->requester_nim)->toBe('012345678')
-        ->and($ticket->extra['guest_book']['service'])->toBe('LEGALISIR IJAZAH');
+        ->and($ticket->extra['guest_book']['service'])->toBe('Legalisir Ijazah')
+        ->and($ticket->extra['guest_book']['type'])->toBe('Permintaan Layanan');
 
     // Gone from the monitor, kept in the history.
     $feed = $this->getJson(route('guest-book.monitor.feed'))->json();
@@ -201,4 +208,95 @@ it('links to the guest book from the login page', function () {
         ->assertOk()
         ->assertSee(route('guest-book.create'))
         ->assertSee(route('guest-book.monitor'));
+});
+
+/* -----------------------------------------------------------------
+ | Permintaan Layanan / Keluhan, Selesai form, search, export
+ * ----------------------------------------------------------------- */
+
+it('splits the form into Permintaan Layanan and Keluhan', function () {
+    $this->get(route('guest-book.create'))
+        ->assertOk()
+        ->assertSee('Permintaan Layanan')
+        ->assertSee('Keluhan')
+        ->assertSee('Permasalahan Alih Kredit')
+        ->assertSee('Tracking Bahan Ajar');
+
+    $this->post(route('guest-book.store'), guestForm(['service' => GuestBookService::KeluhanNilai->value]))
+        ->assertRedirect(route('guest-book.done'));
+
+    $entry = GuestBookEntry::latest('id')->first();
+
+    expect($entry->service->type())->toBe('keluhan')
+        ->and($entry->serviceLabel())->toBe('Keluhan: Permasalahan Nilai');
+});
+
+it('requires a description when "Lainnya" is chosen', function () {
+    $this->post(route('guest-book.store'), guestForm(['service' => GuestBookService::KeluhanLainnya->value, 'description' => '']))
+        ->assertSessionHasErrors('description');
+
+    $this->post(route('guest-book.store'), guestForm(['service' => GuestBookService::LayananLainnya->value, 'description' => 'Minta surat rekomendasi beasiswa']))
+        ->assertRedirect(route('guest-book.done'));
+});
+
+it('records how a visit was finished and by which operator', function () {
+    $this->post(route('guest-book.store'), guestForm());
+    $entry = GuestBookEntry::latest('id')->first();
+    $manager = User::withRole(RoleName::Manager)->firstOrFail();
+    $followUp = User::withRole(RoleName::FollowUp)->firstOrFail();
+
+    $json = $this->actingAs($manager)->postJson(route('guest-book.admin.complete', $entry), [
+        'service_process' => 'langsung',
+        'resolution' => 'langsung',
+        'completed_by' => $followUp->id,
+        'completion_note' => 'Berkas diserahkan.',
+    ])->assertOk()->json();
+
+    $entry->refresh();
+
+    expect($entry->status)->toBe(GuestBookStatus::Done)
+        ->and($entry->completed_by)->toBe($followUp->id)
+        ->and($entry->handled_by)->toBe($manager->id)
+        ->and($entry->service_process)->toBe('langsung')
+        ->and($json['entry']['completed_by'])->toBe($followUp->name)
+        ->and($json['entry']['process'])->toBe('Langsung');
+
+    // Validated: an unknown option or a non-operator is refused.
+    $this->post(route('guest-book.store'), guestForm(['name' => 'Kedua']));
+    $second = GuestBookEntry::latest('id')->first();
+
+    $this->actingAs($manager)->postJson(route('guest-book.admin.complete', $second), [
+        'service_process' => 'kilat', 'resolution' => 'langsung',
+        'completed_by' => User::withRole(RoleName::Creative)->firstOrFail()->id,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['service_process', 'completed_by']);
+});
+
+it('searches by name, phone or number within a date range', function () {
+    $this->post(route('guest-book.store'), guestForm(['name' => 'Cari Saya Nanti', 'whatsapp' => '0811 2233 4455']));
+    $entry = GuestBookEntry::latest('id')->first();
+    $operator = User::withRole(RoleName::Operator)->firstOrFail();
+    $today = now('Asia/Jakarta')->toDateString();
+
+    foreach (['Cari Saya', '0811-2233-4455', $entry->displayNumber()] as $q) {
+        $this->actingAs($operator)
+            ->get(route('guest-book.admin.rows', ['q' => $q, 'from' => $today, 'to' => $today]))
+            ->assertOk()
+            ->assertSee('Cari Saya Nanti');
+    }
+
+    // A range that ends before today does not include it.
+    $this->actingAs($operator)
+        ->get(route('guest-book.admin.rows', ['q' => 'Cari Saya', 'from' => '2026-01-01', 'to' => '2026-01-31']))
+        ->assertOk()
+        ->assertDontSee('Cari Saya Nanti');
+});
+
+it('downloads the filtered list as xlsx', function () {
+    $this->post(route('guest-book.store'), guestForm(['name' => 'Ekspor Tamu']));
+
+    $response = $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())
+        ->get(route('guest-book.admin.export', ['q' => 'Ekspor Tamu', 'filter' => 'all', 'format' => 'xlsx']));
+
+    $response->assertOk();
+    expect($response->headers->get('content-disposition'))->toContain('buku-tamu-')->toContain('.xlsx');
 });

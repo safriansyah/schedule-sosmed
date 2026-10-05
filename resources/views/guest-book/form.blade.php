@@ -92,25 +92,55 @@
                 </div>
             </div>
 
-            <div>
-                <p class="label">Jenis layanan <span class="text-rose-500">*</span></p>
-                <div class="grid gap-2 sm:grid-cols-2">
-                    @foreach ($services as $value => $label)
-                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3 text-[13px] font-semibold leading-snug text-slate-600 transition hover:border-brand-300 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-500/[0.08] has-[:checked]:text-brand-700 dark:border-white/10 dark:text-slate-300 dark:has-[:checked]:text-brand-300">
-                            <input type="radio" name="service" value="{{ $value }}" required @checked(old('service') === $value)
-                                   class="h-4 w-4 shrink-0 border-slate-300 text-brand-600 focus:ring-brand-500/40">
-                            {{ $label }}
-                        </label>
-                    @endforeach
+            {{-- Two steps: what kind of visit, then which item of that kind.
+                 Both wrapped in one x-data so "Lainnya" can make the
+                 description required. --}}
+            @php
+                $oldService = \App\Enums\GuestBookService::tryFrom((string) old('service'));
+                $otherValues = [\App\Enums\GuestBookService::LayananLainnya->value, \App\Enums\GuestBookService::KeluhanLainnya->value];
+            @endphp
+            <div x-data="{ type: @js($oldService?->type() ?? ''), service: @js(old('service', '')), others: @js($otherValues) }" class="space-y-5">
+                <div>
+                    <p class="label">Jenis kunjungan <span class="text-rose-500">*</span></p>
+                    <div class="grid grid-cols-2 gap-2">
+                        @foreach ($types as $typeValue => $typeLabel)
+                            <label class="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 px-3 py-3 text-center text-sm font-bold text-slate-600 transition has-[:checked]:border-brand-500 has-[:checked]:bg-brand-500/[0.08] has-[:checked]:text-brand-700 dark:border-white/10 dark:text-slate-300 dark:has-[:checked]:text-brand-300">
+                                <input type="radio" name="request_type" value="{{ $typeValue }}" x-model="type" @change="service = ''" class="sr-only">
+                                <x-icon :name="$typeValue === 'keluhan' ? 'alert' : 'help-circle'" class="h-5 w-5"/>
+                                {{ $typeLabel }}
+                            </label>
+                        @endforeach
+                    </div>
                 </div>
-                @error('service') <p class="form-error">{{ $message }}</p> @enderror
-            </div>
 
-            <div>
-                <label for="description" class="label">Deskripsi <span class="text-xs font-normal text-slate-400">(opsional)</span></label>
-                <textarea id="description" name="description" rows="3" maxlength="2000" class="input"
-                          placeholder="Ceritakan singkat keperluan Anda">{{ old('description') }}</textarea>
-                @error('description') <p class="form-error">{{ $message }}</p> @enderror
+                @foreach ($serviceGroups as $typeValue => $items)
+                    <div x-show="type === @js($typeValue)" x-cloak>
+                        <p class="label">{{ $types[$typeValue] }} <span class="text-rose-500">*</span></p>
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            @foreach ($items as $value => $label)
+                                <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3 text-[13px] font-semibold leading-snug text-slate-600 transition hover:border-brand-300 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-500/[0.08] has-[:checked]:text-brand-700 dark:border-white/10 dark:text-slate-300 dark:has-[:checked]:text-brand-300">
+                                    <input type="radio" name="service" value="{{ $value }}" x-model="service" :required="type === @js($typeValue)"
+                                           class="h-4 w-4 shrink-0 border-slate-300 text-brand-600 focus:ring-brand-500/40">
+                                    <span><span class="mr-1 font-mono text-[11px] text-slate-400">{{ chr(65 + $loop->index) }}.</span>{{ $label }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                @endforeach
+                <p x-show="type === ''" class="-mt-2 text-xs text-slate-400">Pilih jenis kunjungan untuk melihat pilihannya.</p>
+                @error('service') <p class="form-error">{{ $message }}</p> @enderror
+
+                <div>
+                    <label for="description" class="label">
+                        Deskripsi
+                        <span x-show="others.includes(service)" class="text-rose-500">*</span>
+                        <span x-show="! others.includes(service)" class="text-xs font-normal text-slate-400">(opsional)</span>
+                    </label>
+                    <textarea id="description" name="description" rows="3" maxlength="2000" class="input"
+                              :required="others.includes(service)"
+                              :placeholder="others.includes(service) ? 'Jelaskan keperluan atau keluhan Anda' : 'Ceritakan singkat keperluan Anda'">{{ old('description') }}</textarea>
+                    @error('description') <p class="form-error">{{ $message }}</p> @enderror
+                </div>
             </div>
 
             {{-- Paraf: drawn with a finger, stylus or mouse. --}}
