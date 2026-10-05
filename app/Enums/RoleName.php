@@ -229,22 +229,21 @@ enum RoleName: string
              |                         tickets assigned to (or raised by) them
              |   no CreateTickets   -> they work the queue, they do not open it
              |   no AssignTickets   -> they cannot hand work to anyone else
-             |   no CloseTickets    -> closing demands a resolution and stays
-             |                         with PIC/Operator/Manager
              |   no EditTickets     -> the ticket's information, status and flag
              |                         are read-only to them; they add follow-ups
              |                         and student data, nothing more
              |
-             | HandleTickets on its own cannot close a ticket: a follow-up may
-             | only set the short vocabulary (new / assigned / on_proses), all of
-             | which map to OPEN ticket states, and addFollowUp() refuses a
-             | ticket that is already closed. So "follow up but never finish" is
-             | enforced by the flow, not just by hiding a button.
+             | CloseTickets IS granted: whoever finishes the follow-up closes
+             | the ticket, with the resolution note the close form demands. It
+             | only reaches their own tickets — close() and reopen() go through
+             | guardVisibility(), which without ViewAllTickets admits nothing
+             | assigned to (or raised by) someone else.
              */
             self::FollowUp => [
                 Permission::ViewDashboard,
                 Permission::ViewTickets,
                 Permission::HandleTickets,
+                Permission::CloseTickets,
             ],
 
             // Operator is the only non-admin role that may enrich a contact

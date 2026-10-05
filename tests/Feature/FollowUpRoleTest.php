@@ -36,22 +36,25 @@ function ticketFor(?User $assignee): Ticket
     ]);
 }
 
-it('has exactly the three permissions it needs, and no more', function () {
+it('has exactly the four permissions it needs, and no more', function () {
     $user = followUpUser();
 
-    // The job.
-    expect($user->hasPermission(Permission::ViewDashboard))->toBeTrue();
-    expect($user->hasPermission(Permission::ViewTickets))->toBeTrue();
-    expect($user->hasPermission(Permission::HandleTickets))->toBeTrue();
+    $granted = [
+        Permission::ViewDashboard,
+        Permission::ViewTickets,
+        Permission::HandleTickets,
+        // Whoever finishes the follow-up closes the ticket.
+        Permission::CloseTickets,
+    ];
+
+    foreach ($granted as $permission) {
+        expect($user->hasPermission($permission))->toBeTrue();
+    }
 
     // Everything else. Enumerated rather than counted, so a permission added to
     // the enum later cannot quietly widen this role.
     foreach (Permission::cases() as $permission) {
-        if (in_array($permission, [
-            Permission::ViewDashboard,
-            Permission::ViewTickets,
-            Permission::HandleTickets,
-        ], true)) {
+        if (in_array($permission, $granted, true)) {
             continue;
         }
 
@@ -100,23 +103,50 @@ it('can record a follow up on its own ticket', function () {
     expect($ticket->fresh()->status)->toBe(TicketStatus::FollowUp);
 });
 
-it('cannot close a ticket, even through the follow up form', function () {
+it('closes its own ticket once the follow-up is done, with a resolution note', function () {
     $user = followUpUser();
     $ticket = ticketFor($user);
 
-    // Closing has its own route, and that one is gated on CloseTickets.
-    $this->actingAs($user)
-        ->post(route('tickets.close', $ticket), ['resolution_note' => 'Sudah selesai semua.'])
-        ->assertForbidden();
+    // The close form is on its ticket page.
+    $this->actingAs($user)->get(route('tickets.show', $ticket))
+        ->assertOk()
+        ->assertSee(route('tickets.close', $ticket), false);
 
-    // The status route is EditTickets, which this role does not have, so it
-    // is refused outright — closing or otherwise.
+    // A resolution is required, as for every role.
+    $this->actingAs($user)
+        ->post(route('tickets.close', $ticket), ['resolution_note' => ''])
+        ->assertSessionHasErrors('resolution_note');
+
+    $this->actingAs($user)
+        ->post(route('tickets.close', $ticket), ['resolution_note' => 'Mahasiswa sudah registrasi ulang.'])
+        ->assertRedirect();
+
+    $ticket->refresh();
+
+    expect($ticket->status)->toBe(TicketStatus::Closed)
+        ->and($ticket->closed_by)->toBe($user->id)
+        ->and($ticket->resolution_note)->toBe('Mahasiswa sudah registrasi ulang.');
+});
+
+it('cannot close someone else\'s ticket, nor close through the status or follow-up forms', function () {
+    $user = followUpUser();
+
+    // Someone else's ticket: refused before anything happens.
+    $theirs = ticketFor(User::withRole(RoleName::Pic)->firstOrFail());
+    $this->actingAs($user)
+        ->post(route('tickets.close', $theirs), ['resolution_note' => 'Bukan tiket saya.'])
+        ->assertForbidden();
+    expect($theirs->fresh()->status)->not->toBe(TicketStatus::Closed);
+
+    $ticket = ticketFor($user);
+
+    // The status route is EditTickets, which this role does not have.
     $this->actingAs($user)
         ->post(route('tickets.status', $ticket), ['status' => TicketStatus::Closed->value])
         ->assertForbidden();
 
     // And the follow-up form's own vocabulary cannot reach a closed state:
-    // anything outside new/assigned/on_proses falls back to "on proses".
+    // closing goes through the close form, which demands a resolution.
     $this->actingAs($user)->post(route('tickets.followUp', $ticket), [
         'action' => 'ditelepon',
         'status' => TicketStatus::Closed->value,
