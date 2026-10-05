@@ -25,6 +25,9 @@
 </head>
 <body class="h-full" x-data x-cloak>
 
+    {{-- Light / dark, on the login page too. --}}
+    <x-theme-toggle class="fixed right-4 top-4 z-40"/>
+
     <div class="min-h-full lg:grid lg:grid-cols-2">
 
         {{-- Brand panel — hidden on small screens --}}

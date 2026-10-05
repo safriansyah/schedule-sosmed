@@ -20,11 +20,7 @@
 
     <div class="ml-auto flex items-center gap-2">
         {{-- Theme toggle --}}
-        <button type="button" @click="$store.theme.toggle()"
-                class="btn-ghost relative !px-2.5" aria-label="Ganti tema">
-            <x-icon name="sun" class="h-5 w-5" x-show="$store.theme.dark"/>
-            <x-icon name="moon" class="h-5 w-5" x-show="!$store.theme.dark"/>
-        </button>
+        <x-theme-toggle variant="ghost"/>
 
         {{-- Profile menu --}}
         <div x-data="{ open: false }" class="relative">

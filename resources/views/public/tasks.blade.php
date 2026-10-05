@@ -30,7 +30,9 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-full bg-slate-50 dark:bg-ink-950">
+<body class="min-h-full bg-slate-50 dark:bg-ink-950" x-data>
+
+    <x-theme-toggle class="fixed right-4 top-4 z-40"/>
 
     <div class="mx-auto max-w-3xl px-4 py-12 sm:px-6">
         <header class="mb-10 text-center">

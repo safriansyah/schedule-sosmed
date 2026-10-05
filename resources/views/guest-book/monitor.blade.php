@@ -10,7 +10,7 @@
     Live by polling the whitelisted feed every few seconds, so an operator's
     "Panggil" or "Add Ticket" shows up here without anyone touching the TV.
 --}}
-<x-layouts.public title="Monitor Antrian" wide class="!bg-slate-100 text-slate-800 dark:!bg-ink-950 dark:text-white">
+<x-layouts.public title="Monitor Antrian" wide :theme-toggle="false" class="!bg-slate-100 text-slate-800 dark:!bg-ink-950 dark:text-white">
     <div x-data="queueMonitor(@js(route('guest-book.monitor.feed')), @js($initial))" x-init="start()"
          class="flex min-h-[calc(100vh-3rem)] flex-col gap-6">
 
@@ -32,14 +32,7 @@
                         x-text="sound ? '🔔 Suara aktif' : '🔕 Aktifkan suara'"></button>
 
                 {{-- Light / dark --}}
-                <button type="button" @click="$store.theme.toggle()"
-                        class="grid h-10 w-10 place-items-center rounded-xl border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-50
-                               dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:bg-white/5"
-                        :aria-label="$store.theme.dark ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'"
-                        :title="$store.theme.dark ? 'Mode terang' : 'Mode gelap'">
-                    <x-icon name="sun" class="h-5 w-5" x-show="$store.theme.dark"/>
-                    <x-icon name="moon" class="h-5 w-5" x-show="! $store.theme.dark" x-cloak/>
-                </button>
+                <x-theme-toggle/>
 
                 <div class="text-right">
                     <p class="font-mono text-3xl font-bold tabular-nums lg:text-4xl" x-text="clock"></p>

@@ -7,7 +7,7 @@
 
     wide: the monitor uses the whole screen; forms stay narrow.
 --}}
-@props(['title', 'wide' => false])
+@props(['title', 'wide' => false, 'themeToggle' => true])
 <!DOCTYPE html>
 <html lang="id" class="h-full">
 <head>
@@ -36,6 +36,11 @@
     @stack('head')
 </head>
 <body {{ $attributes->merge(['class' => 'min-h-full bg-slate-50 dark:bg-ink-950']) }} x-data>
+
+    {{-- Light / dark. The monitor turns this off: it has its own in the header. --}}
+    @if ($themeToggle)
+        <x-theme-toggle class="fixed right-4 top-4 z-40"/>
+    @endif
 
     <div class="{{ $wide ? 'px-4 py-6 sm:px-8 lg:px-10' : 'mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12' }}">
         {{ $slot }}

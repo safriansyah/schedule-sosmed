@@ -147,3 +147,27 @@ it('sends a guest to the login page, not to an error', function () {
         $this->get('/'.$uri)->assertRedirect(route('login'));
     }
 });
+
+it('offers the light/dark switch on every kind of page', function () {
+    // Public pages and the login page: the floating toggle.
+    foreach ([route('login'), route('guest-book.create')] as $url) {
+        $this->get($url)->assertOk()->assertSee('$store.theme.toggle()', false);
+    }
+
+    // The monitor has its own in the header — exactly one, not two.
+    $monitor = $this->get(route('guest-book.monitor'))->assertOk()->getContent();
+    expect(substr_count($monitor, '$store.theme.toggle()'))->toBe(1);
+
+    // Signed-in pages: the topbar.
+    $this->actingAs(\App\Models\User::withRole(\App\Enums\RoleName::SuperAdmin)->firstOrFail())
+        ->get(route('dashboard'))->assertOk()->assertSee('$store.theme.toggle()', false);
+});
+
+it('shows error pages in Indonesian, with the theme switch, without the build', function () {
+    $html = $this->get('/halaman-yang-tidak-ada')->assertNotFound()->getContent();
+
+    expect($html)
+        ->toContain('Halaman tidak ditemukan')
+        ->toContain('id="theme-toggle"')
+        ->not->toContain('/build/assets/');
+});
