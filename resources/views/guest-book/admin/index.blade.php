@@ -251,7 +251,7 @@
                         ['Jam daftar', 'registered_at'], ['Jam dipanggil', 'called_at'],
                         ['Selesai', 'finished_at'], ['Operator yang menyelesaikan', 'completed_by'],
                         ['Proses layanan', 'process'], ['Penyelesaian', 'resolution'],
-                        ['Catatan', 'completion_note'], ['Diproses oleh', 'handler'],
+                        ['Catatan', 'completion_note'],
                     ],
 
                     start() {
