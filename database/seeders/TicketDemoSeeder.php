@@ -147,6 +147,17 @@ class TicketDemoSeeder extends Seeder
             'next_action_at' => now()->addDays(5),
         ], $operator ?? $author);
 
+        // Assigning the ticket made the student the operator's (students
+        // follow their tickets). For the made-up example that must not
+        // stick: it would sit in the operator's real Daftar Mahasiswa and
+        // count in their real workload.
+        Student::whereKey($student->id)->update([
+            'assigned_to' => null,
+            'assigned_by' => null,
+            'assigned_at' => null,
+            'assignment_status' => \App\Enums\AssignmentStatus::Unassigned->value,
+        ]);
+
         return true;
     }
 
