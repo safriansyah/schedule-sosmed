@@ -26,18 +26,23 @@
                 </button>
                 <div x-show="tools" x-cloak x-transition
                      class="card absolute right-0 z-30 mt-2 w-60 p-2 shadow-xl">
+                    {{-- Changing a dataset is for whoever manages them; anyone
+                         who may view it may still export it. --}}
+                    @can(\App\Enums\Permission::ManageDatasets->value)
                     <button type="button" @click="$dispatch('open-modal','rename-dataset'); tools=false" class="nav-link w-full">
                         <x-icon name="edit" class="w-4 h-4"/> Ganti nama dataset
                     </button>
                     <button type="button" @click="$dispatch('open-modal','replace'); tools=false" class="nav-link w-full">
                         <x-icon name="upload" class="w-4 h-4"/> Ganti file
                     </button>
+                    @endcan
                     <a href="{{ route('datasets.export', $dataset) }}?format=csv" class="nav-link">
                         <x-icon name="download" class="w-4 h-4"/> Ekspor CSV
                     </a>
                     <a href="{{ route('datasets.export', $dataset) }}?format=json" class="nav-link">
                         <x-icon name="download" class="w-4 h-4"/> Ekspor JSON
                     </a>
+                    @can(\App\Enums\Permission::ManageDatasets->value)
                     <div class="my-1 h-px bg-slate-100 dark:bg-white/5"></div>
                     <form method="POST" action="{{ route('datasets.destroy', $dataset) }}"
                           onsubmit="return confirm('Hapus dataset ini beserta SELURUH datanya secara permanen?')">
@@ -46,6 +51,7 @@
                             <x-icon name="trash" class="w-4 h-4"/> Hapus dataset
                         </button>
                     </form>
+                    @endcan
                 </div>
             </div>
         </div>
@@ -79,6 +85,7 @@
         </div>
     @endif
 
+    @can(\App\Enums\Permission::ManageDatasets->value)
     {{-- Replace modal --}}
     <x-modal name="replace" title="Ganti data dataset">
         <form method="POST" action="{{ route('datasets.replace', $dataset) }}" enctype="multipart/form-data" class="space-y-4">
@@ -119,4 +126,5 @@
             </div>
         </form>
     </x-modal>
+    @endcan
 </x-layouts.app>

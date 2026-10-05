@@ -44,9 +44,11 @@
             <h2 class="mt-6 text-xl font-bold text-slate-800 dark:text-white">Impor gagal</h2>
             <p class="mt-2 break-words rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
                x-text="error || 'Terjadi kesalahan tidak dikenal saat membaca JSON.'"></p>
+            @can(\App\Enums\Permission::ManageDatasets->value)
             <button type="button" @click="$dispatch('open-modal','replace')" class="btn-primary mt-6">
                 <x-icon name="upload" class="w-4 h-4"/> Unggah ulang file
             </button>
+            @endcan
         </div>
     </template>
 </div>

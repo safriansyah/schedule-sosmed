@@ -10,7 +10,9 @@
         </div>
     </x-slot:header>
 
-    {{-- Upload --}}
+    {{-- Upload — only for whoever may manage datasets. Director and Manager
+         look; the form would only answer them with 403. --}}
+    @can(\App\Enums\Permission::ManageDatasets->value)
     <div id="upload" class="card p-6">
         <form method="POST" action="{{ route('datasets.store') }}" enctype="multipart/form-data"
               x-data="{
@@ -66,6 +68,7 @@
             </div>
         </form>
     </div>
+    @endcan
 
     {{-- Filters --}}
     <form method="GET" class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -140,6 +143,7 @@
                             <a href="{{ route('datasets.show', $d) }}" class="btn-ghost !px-2 !py-1.5" title="Buka">
                                 <x-icon name="eye" class="w-4 h-4"/>
                             </a>
+                            @can(\App\Enums\Permission::ManageDatasets->value)
                             <button type="button" @click="$dispatch('open-modal','rename-dataset-{{ $d->id }}')"
                                     class="btn-ghost !px-2 !py-1.5" title="Ganti nama">
                                 <x-icon name="edit" class="w-4 h-4"/>
@@ -151,6 +155,7 @@
                                     <x-icon name="trash" class="w-4 h-4"/>
                                 </button>
                             </form>
+                            @endcan
                         </div>
                     </div>
                 </div>
@@ -161,6 +166,7 @@
 
         {{-- Rename modals — rendered at page level (outside the cards, whose
              hover transform would otherwise break the fixed-position modal) --}}
+        @can(\App\Enums\Permission::ManageDatasets->value)
         @foreach ($datasets as $d)
             <x-modal name="rename-dataset-{{ $d->id }}" title="Ganti nama dataset">
                 <form method="POST" action="{{ route('datasets.update', $d) }}" class="space-y-4">
@@ -185,10 +191,13 @@
                 </form>
             </x-modal>
         @endforeach
+        @endcan
     @else
         <div class="mt-6">
             <x-empty-state icon="layers" title="Belum ada dataset"
-                           desc="Unggah file JSON pertama Anda di atas untuk membuat dasbor analitik secara otomatis." />
+                           :desc="auth()->user()->can(\App\Enums\Permission::ManageDatasets->value)
+                               ? 'Unggah file JSON pertama Anda di atas untuk membuat dasbor analitik secara otomatis.'
+                               : 'Dataset akan tampil di sini setelah Super Admin mengunggahnya.'" />
         </div>
     @endif
 </x-layouts.app>

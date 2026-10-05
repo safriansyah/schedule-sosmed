@@ -62,18 +62,22 @@
             <span class="text-slate-500 dark:text-slate-400">
                 <span class="font-semibold text-slate-700 dark:text-slate-200" x-text="meta.total ?? 0"></span> baris
             </span>
+            @can(\App\Enums\Permission::ManageDatasets->value)
             <template x-if="selected.length">
                 <button type="button" @click="bulkDelete()" class="btn-danger !py-1.5 !px-3">
                     <x-icon name="trash" class="w-4 h-4"/>
                     Hapus (<span x-text="selected.length"></span>)
                 </button>
             </template>
+            @endcan
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            @can(\App\Enums\Permission::ManageDatasets->value)
             <button type="button" @click="$dispatch('open-modal', 'add-row')" class="btn-outline !py-1.5 !px-3">
                 <x-icon name="plus" class="w-4 h-4"/> Tambah baris
             </button>
+            @endcan
             <a :href="exportUrl + '?format=csv&' + queryString()" class="btn-outline !py-1.5 !px-3">
                 <x-icon name="download" class="w-4 h-4"/> CSV
             </a>
@@ -93,10 +97,12 @@
         <table class="w-full text-left text-sm">
             <thead class="sticky top-0 z-10 bg-slate-50/95 backdrop-blur dark:bg-ink-850/95">
                 <tr class="text-xs uppercase tracking-wide text-slate-400">
+                    @can(\App\Enums\Permission::ManageDatasets->value)
                     <th class="w-10 px-4 py-3">
                         <input type="checkbox" @change="toggleAll($event)"
                                class="rounded border-slate-300 text-brand-600 dark:bg-ink-850 dark:border-white/10">
                     </th>
+                    @endcan
                     @foreach ([
                         ['external_id','ID'], ['name','Nama'], ['username','Username'],
                         ['platform','Platform'], ['followers','Pengikut'], ['following','Mengikuti'],
@@ -113,7 +119,9 @@
                             </span>
                         </th>
                     @endforeach
+                    @can(\App\Enums\Permission::ManageDatasets->value)
                     <th class="px-4 py-3 text-right">Aksi</th>
+                    @endcan
                 </tr>
             </thead>
 
@@ -134,10 +142,12 @@
                 <template x-for="row in rows" :key="row.id">
                     <tr class="transition hover:bg-slate-50/70 dark:hover:bg-white/[0.03]"
                         :class="edit.id === row.id && 'bg-brand-50/40 dark:bg-brand-500/5'">
+                        @can(\App\Enums\Permission::ManageDatasets->value)
                         <td class="px-4 py-3">
                             <input type="checkbox" :value="row.id" x-model.number="selected"
                                    class="rounded border-slate-300 text-brand-600 dark:bg-ink-850 dark:border-white/10">
                         </td>
+                        @endcan
 
                         {{-- Read mode --}}
                         <template x-if="edit.id !== row.id">
@@ -214,6 +224,7 @@
                             </td>
                         </template>
 
+                        @can(\App\Enums\Permission::ManageDatasets->value)
                         <td class="px-4 py-3 text-right">
                             <div class="flex items-center justify-end gap-1">
                                 <template x-if="edit.id !== row.id">
@@ -238,6 +249,7 @@
                                 </template>
                             </div>
                         </td>
+                        @endcan
                     </tr>
                 </template>
             </tbody>
@@ -265,6 +277,7 @@
         </div>
     </div>
 
+    @can(\App\Enums\Permission::ManageDatasets->value)
     {{-- Add row modal --}}
     <x-modal name="add-row" title="Tambah baris baru" max-width="max-w-xl">
         <form @submit.prevent="storeRow()" class="grid grid-cols-2 gap-4">
@@ -288,6 +301,7 @@
             </div>
         </form>
     </x-modal>
+    @endcan
 </div>
 
 @push('scripts')
