@@ -144,8 +144,11 @@ it('raises a region\'s tickets straight to an operator, without assigning first'
         ->and($tickets->pluck('assigned_to')->unique()->all())->toBe([$operator->id])
         ->and($tickets->pluck('status')->unique()->map->value->all())->toBe([TicketStatus::Assigned->value])
         ->and($tickets->pluck('source')->unique()->map->value->all())->toBe([TicketSource::StudentImport->value])
-        // No assigning happened: the students' own assignment is untouched.
-        ->and(Student::where('nim', 'like', 'GEN%')->whereNull('assigned_to')->count())->toBe(2);
+        // The students follow their tickets: all of them now the operator's,
+        // and "belum assigned" raised to "assigned" — including the one that
+        // used to be someone else's.
+        ->and(Student::where('nim', 'like', 'GEN%')->pluck('assigned_to')->unique()->all())->toBe([$operator->id])
+        ->and(Student::where('nim', 'like', 'GEN%')->pluck('assignment_status')->unique()->map->value->all())->toBe([AssignmentStatus::Assigned->value]);
 
     // The operator sees those students in Daftar Mahasiswa through the ticket.
     $this->actingAs($operator)->get(route('students.index', ['q' => 'GEN000']))
@@ -208,7 +211,10 @@ it('moves a region\'s open tickets from the wrong operator to the right one', fu
         ->and($genap->pluck('assigned_to')->unique()->all())->toBe([$wrong->id])
         ->and($closed->fresh()->assigned_to)->toBe($wrong->id)
         ->and(\App\Models\TicketAssignment::whereIn('ticket_id', $openGanjil->pluck('id'))
-            ->where('from_user_id', $wrong->id)->where('to_user_id', $right->id)->count())->toBe($openGanjil->count());
+            ->where('from_user_id', $wrong->id)->where('to_user_id', $right->id)->count())->toBe($openGanjil->count())
+        // The students moved with their tickets; the other kecamatan's stayed.
+        ->and(Student::whereIn('id', $openGanjil->pluck('student_id'))->pluck('assigned_to')->unique()->all())->toBe([$right->id])
+        ->and(Student::whereIn('id', $genap->pluck('student_id'))->pluck('assigned_to')->unique()->all())->toBe([$wrong->id]);
 
     // The new holder works them; the old one no longer sees them.
     $this->actingAs($right)->get(route('tickets.show', $openGanjil->first()))->assertOk();
@@ -497,4 +503,31 @@ it('lets one ticket carry unlimited follow ups', function () {
     expect($ticket->refresh()->follow_up_count)->toBe(6)
         ->and($ticket->followUps()->count())->toBe(6)
         ->and($ticket->followUps()->pluck('response_text')->first())->toBe('Follow up ke-1');
+});
+
+it('makes a student the operator\'s when their ticket is assigned from the ticket page', function () {
+    genStudents(1);
+    $student = Student::where('nim', 'like', 'GEN%')->firstOrFail();
+    $operator = operatorNamed('gen-ticketpage@test.local', RoleName::FollowUp);
+
+    $ticket = app(\App\Services\Tickets\TicketService::class)->createManual([
+        'subject' => 'Tiket mahasiswa', 'student_id' => $student->id, 'source' => TicketSource::StudentImport->value,
+    ], admin());
+
+    expect($student->fresh()->assignment_status)->toBe(AssignmentStatus::Unassigned);
+
+    $this->actingAs(admin())->post(route('tickets.assign', $ticket), ['assigned_to' => $operator->id])->assertRedirect();
+
+    $student->refresh();
+
+    expect($student->assigned_to)->toBe($operator->id)
+        ->and($student->assignment_status)->toBe(AssignmentStatus::Assigned);
+
+    // A status further along is progress, and is not pulled back to "assigned".
+    $student->forceFill(['assignment_status' => AssignmentStatus::FollowUp->value])->save();
+    $other = operatorNamed('gen-ticketpage2@test.local', RoleName::FollowUp);
+    $this->actingAs(admin())->post(route('tickets.assign', $ticket), ['assigned_to' => $other->id]);
+
+    expect($student->fresh()->assigned_to)->toBe($other->id)
+        ->and($student->fresh()->assignment_status)->toBe(AssignmentStatus::FollowUp);
 });

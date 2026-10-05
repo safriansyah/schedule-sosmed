@@ -93,6 +93,37 @@ class Student extends Model
     }
 
     /**
+     * The student follows their ticket: whoever a student's ticket is handed
+     * to becomes the student's operator, so the list never says "Belum
+     * assigned" for someone an operator is already working.
+     *
+     * Only the assignment moves. A status already past "assigned" (Follow Up,
+     * Selesai, Ditutup) is progress and is kept; only "belum assigned" is
+     * raised to "assigned".
+     *
+     * @param  array<int, int>  $studentIds
+     */
+    public static function followTicketAssignee(array $studentIds, User $operator, User $actor): int
+    {
+        $studentIds = array_values(array_unique(array_filter(array_map('intval', $studentIds))));
+        $updated = 0;
+
+        foreach (array_chunk($studentIds, 1000) as $chunk) {
+            $now = now();
+
+            $updated += static::whereIn('id', $chunk)
+                ->where(fn (Builder $q) => $q->whereNull('assigned_to')->orWhere('assigned_to', '!=', $operator->id))
+                ->update(['assigned_to' => $operator->id, 'assigned_by' => $actor->id, 'assigned_at' => $now]);
+
+            static::whereIn('id', $chunk)
+                ->where('assignment_status', AssignmentStatus::Unassigned->value)
+                ->update(['assignment_status' => AssignmentStatus::Assigned->value]);
+        }
+
+        return $updated;
+    }
+
+    /**
      * What this user is allowed to see.
      *
      * An operator without the "see everything" permission is restricted to

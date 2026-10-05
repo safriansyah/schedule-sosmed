@@ -270,6 +270,12 @@ class TicketService
                 'assigned_by' => $actor->id,
                 'note' => $note,
             ]);
+
+            // A student's ticket handed to someone makes them the student's
+            // operator too. Un-assigning the ticket leaves the student as is.
+            if ($assignee && $ticket->student_id) {
+                Student::followTicketAssignee([$ticket->student_id], $assignee, $actor);
+            }
         });
 
         $this->log->log(

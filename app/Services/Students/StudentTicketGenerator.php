@@ -210,6 +210,12 @@ class StudentTicketGenerator
 
             $this->insertDetails(array_column($rows, 'number'), $nims, $actor, $now);
 
+            // Tickets handed to a chosen operator take the students with them,
+            // so /students shows them as that operator's, not "belum assigned".
+            if ($assignee) {
+                Student::followTicketAssignee($students->pluck('id')->all(), $assignee, $actor);
+            }
+
             return count($rows);
         });
     }

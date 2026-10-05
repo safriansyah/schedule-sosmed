@@ -200,13 +200,18 @@ class StudentAssigner
                 }
             }
 
-            $students = $this->inRegion($region)
-                ->where('assigned_to', $from->id)
-                ->update([
-                    'assigned_to' => $to->id,
-                    'assigned_by' => $actor->id,
-                    'assigned_at' => now(),
-                ]);
+            // The students follow: those whose tickets just moved, and any the
+            // old operator held in the region the old way.
+            $studentIds = $this->inRegion($region)
+                ->where(fn ($q) => $q
+                    ->where('assigned_to', $from->id)
+                    ->orWhereIn('id', $tickets->isEmpty()
+                        ? [0]
+                        : Ticket::whereIn('id', $tickets->pluck('id'))->whereNotNull('student_id')->pluck('student_id')->all()))
+                ->pluck('id')
+                ->all();
+
+            $students = Student::followTicketAssignee($studentIds, $to, $actor);
 
             return ['students' => $students, 'tickets' => $moved];
         });
