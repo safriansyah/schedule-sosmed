@@ -31,6 +31,18 @@ class StudentTicketController extends Controller
             ...StudentStats::REGION_LEVELS,
         );
 
+        // No more "generate everything": a ticket is raised for students an
+        // operator holds, in a chosen region — the same scope the "Assign
+        // Wilayah & Ticket" button on /students/unsigned uses.
+        $hasRegion = array_filter(array_intersect_key($filters, array_flip(StudentStats::REGION_LEVELS)), fn ($v) => filled($v)) !== [];
+        $hasOperator = filled($filters['operator'] ?? null) && (string) $filters['operator'] !== '0';
+
+        if (! $hasRegion || ! $hasOperator) {
+            return back()->withErrors([
+                'generate' => 'Pilih operator dan wilayah terlebih dahulu — gunakan "Assign Wilayah & Ticket".',
+            ]);
+        }
+
         $result = $this->generator->generate($filters, $request->user());
 
         if ($result['created'] === 0) {

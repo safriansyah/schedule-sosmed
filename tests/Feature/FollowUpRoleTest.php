@@ -36,7 +36,7 @@ function ticketFor(?User $assignee): Ticket
     ]);
 }
 
-it('has exactly the four permissions it needs, and no more', function () {
+it('has exactly the five permissions it needs, and no more', function () {
     $user = followUpUser();
 
     $granted = [
@@ -45,6 +45,8 @@ it('has exactly the four permissions it needs, and no more', function () {
         Permission::HandleTickets,
         // Whoever finishes the follow-up closes the ticket.
         Permission::CloseTickets,
+        // Daftar Mahasiswa, read-only and limited to their own students.
+        Permission::ViewStudents,
     ];
 
     foreach ($granted as $permission) {
@@ -172,10 +174,33 @@ it('is kept out of the rest of the app', function () {
     $user = followUpUser();
 
     // Not a list of every route — a sample across the modules this role has no
-    // business in, so a future permission slip shows up here.
-    foreach (['/students', '/interactions', '/contacts', '/monitoring', '/reports/tickets', '/users'] as $uri) {
+    // business in, so a future permission slip shows up here. (/students is
+    // no longer one of them: see the next test.)
+    foreach (['/students/unsigned', '/students/import', '/interactions', '/contacts', '/monitoring', '/reports/tickets', '/users'] as $uri) {
         $this->actingAs($user)->get($uri)->assertForbidden();
     }
+});
+
+it('sees its own students in Daftar Mahasiswa, read-only', function () {
+    $user = followUpUser();
+    $other = User::withRole(RoleName::Pic)->firstOrFail();
+
+    $mine = \App\Models\Student::create(['nim' => 'FUSTU00001', 'nama' => 'Mahasiswa Milik FU', 'assigned_to' => $user->id, 'assignment_status' => 'assigned']);
+    $theirs = \App\Models\Student::create(['nim' => 'FUSTU00002', 'nama' => 'Mahasiswa Orang Lain', 'assigned_to' => $other->id, 'assignment_status' => 'assigned']);
+
+    $this->actingAs($user)->get(route('students.index', ['q' => 'FUSTU']))
+        ->assertOk()
+        ->assertSee('Mahasiswa Milik FU')
+        ->assertDontSee('Mahasiswa Orang Lain');
+
+    $this->actingAs($user)->get(route('students.show', $mine))->assertOk();
+    $this->actingAs($user)->get(route('students.show', $theirs))->assertForbidden();
+
+    // Looking, not editing.
+    $this->actingAs($user)->put(route('students.update', $mine), ['catatan' => 'diubah'])->assertForbidden();
+
+    // The sidebar now offers the list.
+    $this->actingAs($user)->get(route('dashboard'))->assertSee(route('students.index'), false);
 });
 
 it('sees the ticket information read-only, without the status, flag or assignment forms', function () {

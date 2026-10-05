@@ -113,11 +113,18 @@ class StudentController extends Controller
         // 27 ms of the page's 89 ms of database time for no new information.
         $matching = $students->total();
 
-        // Generating tickets is NOT limited to the unassigned pool: a student
-        // an operator already holds needs a ticket just as much. So the
-        // generator sees the same filter without that restriction, and the
-        // screen says which number belongs to which button.
-        $ticketFilters = Arr::except($filters, 'assignment');
+        // Who already holds students in the chosen region, and how many — what
+        // "Pindah Operator" offers as the source, so the admin moves from a
+        // name that actually has something there.
+        $region = array_filter(Arr::only($filters, StudentStats::REGION_LEVELS), fn ($v) => filled($v));
+        $regionHolders = $region === []
+            ? collect()
+            : Student::query()
+                ->filtered($region)
+                ->whereNotNull('assigned_to')
+                ->selectRaw('assigned_to, COUNT(*) AS total')
+                ->groupBy('assigned_to')
+                ->pluck('total', 'assigned_to');
 
         return view('students.unsigned', [
             'students' => $students,
@@ -132,10 +139,10 @@ class StudentController extends Controller
             'perPageOptions' => self::PER_PAGE,
             'perPage' => $this->perPage($request, 50),
             'workload' => $this->stats->workload(),
-            'ticketFilters' => $ticketFilters,
-            // How many students in this filter would actually get a ticket.
-            'ticketPending' => $this->generator->countPending($ticketFilters),
-            'ticketScope' => Student::query()->filtered($ticketFilters)->count(),
+            'regionChosen' => $region,
+            'regionHolders' => $regionHolders,
+            'holderNames' => User::whereIn('id', $regionHolders->keys())->pluck('name', 'id'),
+            // Whether "Assign Wilayah & Ticket" also raises the tickets.
             'canGenerate' => $user->hasPermission(Permission::CreateTickets),
         ]);
     }

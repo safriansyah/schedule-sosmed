@@ -141,6 +141,73 @@ class StudentAssigner
     }
 
     /**
+     * "Pindah Operator": everything one operator holds in a region goes to
+     * another — the fix for a region handed to the wrong person.
+     *
+     * Students and their OPEN tickets move together; closed tickets stay with
+     * whoever closed them, since that work is done. Each ticket's assignment
+     * history records the move.
+     *
+     * @param  array<string, string|null>  $region
+     * @return array{students: int, tickets: int}
+     */
+    public function moveRegion(array $region, User $from, User $to, User $actor): array
+    {
+        $region = array_filter(
+            array_intersect_key($region, array_flip(StudentStats::REGION_LEVELS)),
+            fn ($value) => filled($value),
+        );
+
+        // Same guard as assignByRegion(): no region would mean "everything
+        // this operator holds", which is a different, much bigger action.
+        if ($region === [] || $from->is($to)) {
+            return ['students' => 0, 'tickets' => 0];
+        }
+
+        $result = DB::transaction(function () use ($region, $from, $to, $actor) {
+            $ids = $this->inRegion($region)
+                ->where('assigned_to', $from->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->pluck('id')
+                ->all();
+
+            if ($ids === []) {
+                return ['students' => 0, 'tickets' => 0];
+            }
+
+            $students = Student::whereIn('id', $ids)->update([
+                'assignment_status' => AssignmentStatus::Assigned->value,
+                'assigned_to' => $to->id,
+                'assigned_by' => $actor->id,
+                'assigned_at' => now(),
+            ]);
+
+            $tickets = $this->handOverTickets($ids, $to, $actor, "Pindah operator dari {$from->name}");
+
+            return ['students' => $students, 'tickets' => $tickets];
+        });
+
+        if ($result['students'] > 0) {
+            $this->log->log(
+                'student.moved',
+                sprintf(
+                    'Pindah %d mahasiswa (%d tiket) wilayah %s dari %s ke %s',
+                    $result['students'],
+                    $result['tickets'],
+                    implode(' › ', $region),
+                    $from->name,
+                    $to->name,
+                ),
+                null,
+                ['from' => $from->id, 'to' => $to->id, 'region' => $region] + $result,
+            );
+        }
+
+        return $result;
+    }
+
+    /**
      * Take students back off an operator, returning them to the pool.
      *
      * @param  array<int, int>  $studentIds
@@ -206,8 +273,10 @@ class StudentAssigner
      *
      * @param  array<int, int>  $studentIds
      */
-    private function handOverTickets(array $studentIds, User $operator, User $actor): void
+    private function handOverTickets(array $studentIds, User $operator, User $actor, string $note = 'Ikut penugasan mahasiswa'): int
     {
+        $moved = 0;
+
         foreach (array_chunk($studentIds, 1000) as $chunk) {
             $tickets = Ticket::query()
                 ->open()
@@ -222,7 +291,7 @@ class StudentAssigner
             $now = now();
             $ids = $tickets->pluck('id')->all();
 
-            Ticket::whereIn('id', $ids)->update(['assigned_to' => $operator->id, 'assigned_at' => $now]);
+            $moved += Ticket::whereIn('id', $ids)->update(['assigned_to' => $operator->id, 'assigned_at' => $now]);
 
             // Open → Assigned, the same step TicketService::assign() takes.
             Ticket::whereIn('id', $ids)
@@ -234,11 +303,13 @@ class StudentAssigner
                 'from_user_id' => $t->assigned_to,
                 'to_user_id' => $operator->id,
                 'assigned_by' => $actor->id,
-                'note' => 'Ikut penugasan mahasiswa',
+                'note' => $note,
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->all());
         }
+
+        return $moved;
     }
 
     private function logHandout(int $count, User $operator, User $actor, string $how): void

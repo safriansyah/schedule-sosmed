@@ -230,6 +230,7 @@ Route::middleware('auth')->group(function () {
 
     Route::post('students/assign/selected', [StudentAssignmentController::class, 'selected'])->name('students.assign.selected');
     Route::post('students/assign/region', [StudentAssignmentController::class, 'byRegion'])->name('students.assign.region');
+    Route::post('students/assign/move', [StudentAssignmentController::class, 'move'])->name('students.assign.move');
     Route::post('students/assign/release', [StudentAssignmentController::class, 'release'])->name('students.assign.release');
 
     // Generate Ticket: satu tiket per mahasiswa, source Import Mahasiswa.

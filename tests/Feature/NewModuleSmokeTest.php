@@ -91,8 +91,11 @@ it('renders the student list, detail and hand-out screens', function () {
 
     $this->actingAs(admin())->get(route('students.unsigned'))
         ->assertOk()
-        ->assertSee('Generate Ticket')
-        ->assertSee('Assign per Wilayah');
+        // One combined action, plus the undo; the old "generate everything"
+        // form is gone.
+        ->assertSee('Assign Wilayah &amp; Ticket', false)
+        ->assertSee('Pindah Operator')
+        ->assertDontSee(route('students.tickets.generate'), false);
 
     $this->actingAs(admin())->get(route('students.unsigned', ['q' => 'SMOKE00001']))
         ->assertOk()

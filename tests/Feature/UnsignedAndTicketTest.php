@@ -108,16 +108,79 @@ it('hands the ticket to whoever already holds the student', function () {
     expect($tickets->pluck('assigned_to')->unique()->all())->toBe([$operator->id]);
 });
 
-it('generates from the screen and reports what happened', function () {
+it('no longer generates tickets for everyone without an operator and a region', function () {
     genStudents(3);
 
     $this->actingAs(admin())
         ->from(route('students.unsigned'))
         ->post(route('students.tickets.generate'), genFilter())
         ->assertRedirect()
+        ->assertSessionHasErrors('generate');
+
+    expect(Ticket::where('requester_nim', 'like', 'GEN%')->count())->toBe(0);
+});
+
+it('assigns a region and raises its tickets in one step', function () {
+    genStudents(4);
+    $operator = operatorNamed('gen-region@test.local');
+
+    $this->actingAs(admin())
+        ->from(route('students.unsigned'))
+        ->post(route('students.assign.region'), ['kabupaten' => 'Kabupaten Generate', 'operator_id' => $operator->id])
+        ->assertRedirect()
         ->assertSessionHas('success');
 
-    expect(Ticket::where('requester_nim', 'like', 'GEN%')->count())->toBe(3);
+    $students = Student::where('nim', 'like', 'GEN%')->get();
+    $tickets = Ticket::where('requester_nim', 'like', 'GEN%')->get();
+
+    expect($students->pluck('assigned_to')->unique()->all())->toBe([$operator->id])
+        ->and($tickets)->toHaveCount(4)
+        ->and($tickets->pluck('assigned_to')->unique()->all())->toBe([$operator->id])
+        ->and($tickets->pluck('source')->unique()->map->value->all())->toBe([TicketSource::StudentImport->value]);
+
+    // Without a region nothing happens at all.
+    $this->actingAs(admin())
+        ->post(route('students.assign.region'), ['operator_id' => $operator->id])
+        ->assertSessionHasErrors('kabupaten');
+});
+
+it('moves a region from the wrong operator to the right one, tickets included', function () {
+    genStudents(4);
+    $wrong = operatorNamed('gen-wrong@test.local');
+    $right = operatorNamed('gen-right@test.local');
+
+    $this->actingAs(admin())->post(route('students.assign.region'), ['kabupaten' => 'Kabupaten Generate', 'operator_id' => $wrong->id]);
+
+    // Only one kecamatan moves; the other stays with the first operator.
+    $this->actingAs(admin())
+        ->from(route('students.unsigned'))
+        ->post(route('students.assign.move'), [
+            'kabupaten' => 'Kabupaten Generate',
+            'kecamatan' => 'Kecamatan Ganjil',
+            'from_operator_id' => $wrong->id,
+            'to_operator_id' => $right->id,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $moved = Student::where('nim', 'like', 'GEN%')->where('kecamatan', 'Kecamatan Ganjil')->get();
+    $stayed = Student::where('nim', 'like', 'GEN%')->where('kecamatan', 'Kecamatan Genap')->get();
+
+    expect($moved->pluck('assigned_to')->unique()->all())->toBe([$right->id])
+        ->and($stayed->pluck('assigned_to')->unique()->all())->toBe([$wrong->id])
+        ->and(Ticket::whereIn('student_id', $moved->pluck('id'))->pluck('assigned_to')->unique()->all())->toBe([$right->id])
+        ->and(Ticket::whereIn('student_id', $stayed->pluck('id'))->pluck('assigned_to')->unique()->all())->toBe([$wrong->id])
+        ->and(\App\Models\TicketAssignment::whereIn('ticket_id', Ticket::whereIn('student_id', $moved->pluck('id'))->pluck('id'))
+            ->where('to_user_id', $right->id)->where('note', 'like', 'Pindah operator%')->count())->toBe($moved->count());
+
+    // Same operator on both sides, or no region: refused.
+    $this->actingAs(admin())->post(route('students.assign.move'), [
+        'kabupaten' => 'Kabupaten Generate', 'from_operator_id' => $right->id, 'to_operator_id' => $right->id,
+    ])->assertSessionHasErrors('to_operator_id');
+
+    $this->actingAs(admin())->post(route('students.assign.move'), [
+        'from_operator_id' => $wrong->id, 'to_operator_id' => $right->id,
+    ])->assertSessionHasErrors('move');
 });
 
 /* -----------------------------------------------------------------

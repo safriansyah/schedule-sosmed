@@ -6,6 +6,7 @@ use App\Enums\Permission;
 use App\Models\User;
 use App\Services\Students\StudentAssigner;
 use App\Services\Students\StudentStats;
+use App\Services\Students\StudentTicketGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -60,56 +61,132 @@ class StudentAssignmentController extends Controller
     }
 
     /**
-     * Every unassigned student in a region → one operator.
+     * "Assign Wilayah & Ticket": every unassigned student in a region goes to
+     * one operator, and in the same step each of that operator's students in
+     * the region gets a ticket, already in the operator's name.
      *
-     * The admin narrows as far as they like: a whole kabupaten, or one
-     * kelurahan. There is no count field, by design.
+     * Both an operator and a region are required: there is no "everything"
+     * button any more, so a ticket is never raised without someone to work
+     * it. The admin narrows as far as they like — a whole kabupaten, a
+     * kecamatan, a Pokjar/SALUT — and there is no count field, by design.
      */
-    public function byRegion(Request $request): RedirectResponse
+    public function byRegion(Request $request, StudentTicketGenerator $generator): RedirectResponse
     {
         $this->authorize(Permission::AssignStudents->value);
 
-        $rules = ['operator_id' => ['required', 'integer', User::ticketHandlerRule()]];
+        [$region, $operator] = $this->regionAndOperator($request, 'operator_id');
+
+        if ($region === null) {
+            return back()->withErrors([
+                'kabupaten' => 'Pilih minimal satu tingkat wilayah (Kabupaten, Kecamatan, Pokjar/SALUT, …). Tanpa itu seluruh mahasiswa akan ikut terbagikan.',
+            ])->withInput();
+        }
+
+        $result = $this->assigner->assignByRegion($region, $operator, $request->user());
+
+        // Tickets for this operator's students in the region that have none
+        // yet — the ones just assigned, and any they already held there.
+        $tickets = $request->user()->hasPermission(Permission::CreateTickets)
+            ? $generator->generate($region + ['operator' => (string) $operator->id], $request->user())['created']
+            : 0;
+
+        if ($result['assigned'] === 0 && $tickets === 0) {
+            return back()->withErrors([
+                'kabupaten' => $result['matched'] > 0
+                    ? "Semua {$result['matched']} mahasiswa di wilayah itu sudah dipegang operator lain, dan tiket {$operator->name} di wilayah ini sudah lengkap."
+                    : 'Tidak ada mahasiswa di wilayah itu.',
+            ])->withInput();
+        }
+
+        $where = $this->describe($region);
+        $message = "{$result['assigned']} mahasiswa wilayah {$where} ditugaskan ke {$operator->name}";
+        $message .= $tickets > 0 ? ", {$tickets} tiket dibuat." : '.';
+
+        // The gap between matched and assigned is how the admin learns part of
+        // the region was already someone else's.
+        if ($result['matched'] > $result['assigned']) {
+            $held = $result['matched'] - $result['assigned'];
+            $message .= " {$held} dilewati karena sudah dipegang operator (pakai Pindah Operator bila salah).";
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * "Pindah Operator": a region handed to the wrong person goes to the
+     * right one — students and their open tickets together.
+     */
+    public function move(Request $request): RedirectResponse
+    {
+        $this->authorize(Permission::AssignStudents->value);
+
+        $request->validate([
+            'from_operator_id' => ['required', 'integer', 'exists:users,id'],
+            'to_operator_id' => ['required', 'integer', 'different:from_operator_id', User::ticketHandlerRule()],
+        ], [
+            'to_operator_id.different' => 'Operator tujuan harus berbeda dari operator asal.',
+        ], [
+            'from_operator_id' => 'operator asal',
+            'to_operator_id' => 'operator tujuan',
+        ]);
+
+        [$region, $to] = $this->regionAndOperator($request, 'to_operator_id');
+        $from = User::findOrFail($request->integer('from_operator_id'));
+
+        if ($region === null) {
+            return back()->withErrors([
+                'move' => 'Pilih wilayah yang ingin dipindahkan di filter atas.',
+            ])->withInput();
+        }
+
+        $result = $this->assigner->moveRegion($region, $from, $to, $request->user());
+
+        if ($result['students'] === 0) {
+            return back()->withErrors([
+                'move' => "{$from->name} tidak memegang mahasiswa di wilayah {$this->describe($region)}.",
+            ])->withInput();
+        }
+
+        return back()->with('success', sprintf(
+            '%d mahasiswa dan %d tiket wilayah %s dipindah dari %s ke %s.',
+            $result['students'],
+            $result['tickets'],
+            $this->describe($region),
+            $from->name,
+            $to->name,
+        ));
+    }
+
+    /**
+     * The region levels from the request (null when none is chosen) and the
+     * operator named by $field, validated as a ticket handler.
+     *
+     * @return array{0: array<string, string>|null, 1: User}
+     */
+    private function regionAndOperator(Request $request, string $field): array
+    {
+        $rules = [$field => ['required', 'integer', User::ticketHandlerRule()]];
 
         foreach (StudentStats::REGION_LEVELS as $level) {
             $rules[$level] = ['nullable', 'string', 'max:128'];
         }
 
         $data = $request->validate($rules, [], [
-            'operator_id' => 'operator',
+            $field => 'operator',
         ] + StudentStats::regionLabels());
 
-        $region = array_intersect_key($data, array_flip(StudentStats::REGION_LEVELS));
+        $region = array_filter(
+            array_intersect_key($data, array_flip(StudentStats::REGION_LEVELS)),
+            fn ($v) => filled($v),
+        );
 
-        if (array_filter($region, fn ($v) => filled($v)) === []) {
-            return back()->withErrors([
-                'kabupaten' => 'Pilih minimal satu tingkat wilayah. Tanpa itu seluruh mahasiswa akan ikut terbagikan.',
-            ])->withInput();
-        }
+        return [$region === [] ? null : $region, User::findOrFail($data[$field])];
+    }
 
-        $operator = User::findOrFail($data['operator_id']);
-
-        $result = $this->assigner->assignByRegion($region, $operator, $request->user());
-
-        if ($result['assigned'] === 0) {
-            return back()->withErrors([
-                'kabupaten' => $result['matched'] > 0
-                    ? "Semua {$result['matched']} mahasiswa di wilayah itu sudah dipegang operator lain."
-                    : 'Tidak ada mahasiswa di wilayah itu.',
-            ])->withInput();
-        }
-
-        $where = implode(' › ', array_filter($region, fn ($v) => filled($v)));
-        $message = "{$result['assigned']} mahasiswa wilayah {$where} ditugaskan ke {$operator->name}.";
-
-        // The gap between matched and assigned is how the admin learns part of
-        // the region was already someone else's.
-        if ($result['matched'] > $result['assigned']) {
-            $held = $result['matched'] - $result['assigned'];
-            $message .= " {$held} dilewati karena sudah dipegang operator lain.";
-        }
-
-        return back()->with('success', $message);
+    /** @param  array<string, string>  $region */
+    private function describe(array $region): string
+    {
+        return implode(' › ', $region);
     }
 
     /** Return students to the pool. */

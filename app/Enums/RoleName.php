@@ -244,6 +244,10 @@ enum RoleName: string
                 Permission::ViewTickets,
                 Permission::HandleTickets,
                 Permission::CloseTickets,
+                // Daftar Mahasiswa, read-only. Without ViewAllStudents the
+                // list and Student::visibleTo() show only the students handed
+                // to them — the ones behind their tickets.
+                Permission::ViewStudents,
             ],
 
             // Operator is the only non-admin role that may enrich a contact
@@ -260,7 +264,9 @@ enum RoleName: string
                 // deliberately absent, and the query scopes enforce it rather
                 // than the UI hiding buttons.
                 Permission::ViewStudents,
-                Permission::ManageStudents,
+                // Daftar Mahasiswa is read-only for operators: they check the
+                // records they were given, the admin keeps them correct.
+                // (No ManageStudents.)
                 Permission::ViewTickets,
                 Permission::CreateTickets,
                 Permission::HandleTickets,
