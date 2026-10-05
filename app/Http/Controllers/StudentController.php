@@ -365,10 +365,8 @@ class StudentController extends Controller
     /** @return \Illuminate\Support\Collection<int, User> */
     private function operators()
     {
-        return User::query()
-            ->active()
-            ->whereHas('role', fn ($q) => $q->whereIn('name', ['operator', 'pic', 'manager']))
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        // The same list as the ticket assign form: handing out a student also
+        // hands over their tickets, so both pickers must offer the same people.
+        return User::ticketHandlerOptions();
     }
 }

@@ -16,17 +16,29 @@ class EnsureUserIsActive
     public function handle(Request $request, Closure $next): Response
     {
         if (Auth::check() && ! Auth::user()->is_active) {
-            Auth::guard('web')->logout();
+            return $this->signOut($request, 'Akun Anda dinonaktifkan. Hubungi administrator.');
+        }
 
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return redirect()->route('login')->with('toast', [
-                'message' => 'Akun Anda dinonaktifkan. Hubungi administrator.',
-                'type' => 'error',
-            ]);
+        // The login schedule holds for a session already open as well: when
+        // the window closes at 17:00, a tab left open does not keep working.
+        if (Auth::check() && ! Auth::user()->loginAllowedAt(now())) {
+            return $this->signOut($request, 'Akses login Anda berada di luar jadwal yang telah ditentukan.');
         }
 
         return $next($request);
+    }
+
+    private function signOut(Request $request, string $message): Response
+    {
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message], 401);
+        }
+
+        return redirect()->route('login')->with('toast', ['message' => $message, 'type' => 'error']);
     }
 }

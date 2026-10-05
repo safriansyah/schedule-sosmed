@@ -44,6 +44,30 @@ class UserRequest extends FormRequest
             ],
 
             'is_active' => ['nullable', 'boolean'],
+
+            // Jadwal login (Super Admin only — see UserController).
+            'login_schedule_enabled' => ['nullable', 'boolean'],
+            'login_start_date' => ['nullable', 'date_format:Y-m-d'],
+            'login_end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:login_start_date'],
+            'login_start_time' => ['nullable', 'date_format:H:i'],
+            'login_end_time' => ['nullable', 'date_format:H:i'],
+        ];
+    }
+
+    public function after(): array
+    {
+        return [
+            function (\Illuminate\Validation\Validator $validator) {
+                // An enabled schedule with nothing in it would silently allow
+                // everything — almost certainly not what was meant.
+                if ($this->boolean('login_schedule_enabled')
+                    && ! $this->filled(['login_start_date'])
+                    && ! $this->filled(['login_end_date'])
+                    && ! $this->filled(['login_start_time'])
+                    && ! $this->filled(['login_end_time'])) {
+                    $validator->errors()->add('login_schedule_enabled', 'Isi tanggal dan/atau jam login bila pembatasan diaktifkan.');
+                }
+            },
         ];
     }
 
@@ -57,11 +81,17 @@ class UserRequest extends FormRequest
             'role_id.required' => 'Pilih role pengguna.',
             'password.required' => 'Kata sandi wajib diisi.',
             'password.confirmed' => 'Konfirmasi kata sandi tidak cocok.',
+            'login_end_date.after_or_equal' => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
+            'login_start_time.date_format' => 'Format jam mulai HH:MM, misalnya 08:00.',
+            'login_end_time.date_format' => 'Format jam selesai HH:MM, misalnya 17:00.',
         ];
     }
 
     protected function prepareForValidation(): void
     {
-        $this->merge(['is_active' => $this->boolean('is_active')]);
+        $this->merge([
+            'is_active' => $this->boolean('is_active'),
+            'login_schedule_enabled' => $this->boolean('login_schedule_enabled'),
+        ]);
     }
 }

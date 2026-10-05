@@ -32,7 +32,7 @@ class StudentAssignmentController extends Controller
         $data = $request->validate([
             'students' => ['required', 'array', 'min:1'],
             'students.*' => ['integer'],
-            'operator_id' => ['required', 'integer', 'exists:users,id'],
+            'operator_id' => ['required', 'integer', User::ticketHandlerRule()],
             'reassign' => ['nullable', 'boolean'],
         ], [], [
             'students' => 'mahasiswa',
@@ -69,7 +69,7 @@ class StudentAssignmentController extends Controller
     {
         $this->authorize(Permission::AssignStudents->value);
 
-        $rules = ['operator_id' => ['required', 'integer', 'exists:users,id']];
+        $rules = ['operator_id' => ['required', 'integer', User::ticketHandlerRule()]];
 
         foreach (StudentStats::REGION_LEVELS as $level) {
             $rules[$level] = ['nullable', 'string', 'max:128'];

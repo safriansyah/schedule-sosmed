@@ -59,8 +59,12 @@
                      (or disappear) the moment Import Mahasiswa is chosen. --}}
                 <select id="source" name="source" class="input" onchange="this.form.submit()">
                     <option value="">Semua sumber</option>
-                    @foreach ($sources as $value => $label)
+                    @foreach ($sources as $sourceGroup => $groupItems)
+                        <optgroup label="{{ $sourceGroup }}">
+                        @foreach ($groupItems as $value => $label)
                         <option value="{{ $value }}" @selected(($filters['source'] ?? '') === $value)>{{ $label }}</option>
+                        @endforeach
+                        </optgroup>
                     @endforeach
                 </select>
             </div>

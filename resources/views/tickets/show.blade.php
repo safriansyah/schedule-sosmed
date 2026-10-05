@@ -102,6 +102,48 @@
                 </div>
             @endif
 
+            {{-- From the Buku Tamu / Antrian: what the visitor filled in. --}}
+            @if ($entry = $ticket->guestBookEntry)
+                <div class="card p-5">
+                    <div class="mb-3 flex flex-wrap items-center gap-2">
+                        <span class="{{ $ticket->source->badge() }}">
+                            <x-icon :name="$ticket->source->icon()" class="h-3 w-3"/>
+                            {{ $ticket->source->label() }}
+                        </span>
+                        <span class="text-xs text-slate-400">
+                            Antrian <strong class="font-mono text-slate-600 dark:text-slate-300">{{ $entry->displayNumber() }}</strong>
+                            · {{ $entry->queue_date->translatedFormat('d M Y') }}, {{ $entry->created_at->timezone('Asia/Jakarta')->format('H:i') }}
+                        </span>
+                    </div>
+
+                    <div class="flex flex-wrap gap-4">
+                        <dl class="grid min-w-0 flex-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                            <div><dt class="text-xs text-slate-400">Jenis layanan</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ $entry->service->label() }}</dd></div>
+                            <div><dt class="text-xs text-slate-400">Jenis kelamin</dt><dd class="text-slate-700 dark:text-slate-200">{{ $entry->gender->label() }}</dd></div>
+                            <div>
+                                <dt class="text-xs text-slate-400">No. WhatsApp</dt>
+                                <dd>
+                                    @if ($wa = \App\Support\PhoneNumber::waLink($entry->whatsapp))
+                                        <a href="{{ $wa }}" target="_blank" rel="noopener" class="font-medium text-emerald-600 hover:underline">{{ \App\Support\PhoneNumber::pretty($entry->whatsapp) ?? $entry->whatsapp }}</a>
+                                    @else
+                                        {{ $entry->whatsapp }}
+                                    @endif
+                                </dd>
+                            </div>
+                            <div><dt class="text-xs text-slate-400">No. HP</dt><dd class="text-slate-700 dark:text-slate-200">{{ \App\Support\PhoneNumber::pretty($entry->phone) ?? $entry->phone }}</dd></div>
+                        </dl>
+
+                        @if ($entry->signature_path)
+                            <div>
+                                <p class="mb-1 text-xs text-slate-400">Paraf</p>
+                                <img src="{{ route('guest-book.admin.signature', $entry) }}" alt="Paraf {{ $entry->name }}" loading="lazy"
+                                     class="h-16 w-36 rounded-xl border border-slate-200 bg-white object-contain p-1 dark:border-white/10 dark:invert">
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @endif
+
             {{-- Ticket information. Read-only to whoever lacks EditTickets
                  (Operator Follow Up): they work the case, they do not rewrite it. --}}
             @php $canEditInfo = ! $ticket->isClosed() && auth()->user()->can(\App\Enums\Permission::EditTickets->value); @endphp
@@ -694,15 +736,7 @@
                     <label for="assigned_to" class="label">Operator / Agent</label>
                     <select id="assigned_to" name="assigned_to" class="input" @disabled($ticket->isClosed())>
                         <option value="">— Belum ditugaskan —</option>
-                        @foreach ($operators->groupBy(fn ($u) => $u->role?->label ?? 'Lainnya') as $roleLabel => $group)
-                            <optgroup label="{{ $roleLabel }}">
-                                @foreach ($group as $operator)
-                                    <option value="{{ $operator->id }}" @selected($ticket->assigned_to === $operator->id)>
-                                        {{ $operator->name }}
-                                    </option>
-                                @endforeach
-                            </optgroup>
-                        @endforeach
+                        <x-operator-options :operators="$operators" :selected="$ticket->assigned_to"/>
                     </select>
 
                     <div class="mt-3">

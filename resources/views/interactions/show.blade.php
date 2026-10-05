@@ -221,6 +221,138 @@
                 @endif
             </div>
 
+            {{-- Follow up, as many times as the conversation needs, then Close.
+                 Close is not delete: the history below stays, and a new
+                 follow-up opens the interaction again. --}}
+            <div id="follow-up" class="card p-5">
+                @php $closed = $interaction->status === \App\Enums\InteractionStatus::Closed; @endphp
+
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-white">
+                        <x-icon name="reply" class="h-4 w-4 text-brand-500"/>
+                        Follow Up
+                        <span class="{{ $interaction->status->badge() }}">
+                            <x-icon :name="$interaction->status->icon()" class="h-3 w-3"/> {{ $interaction->status->label() }}
+                        </span>
+                    </h2>
+
+                    @can(\App\Enums\Permission::HandleInteractions->value)
+                        @if ($closed)
+                            <form method="POST" action="{{ route('interactions.reopen', $interaction) }}">
+                                @csrf
+                                <button class="btn-outline btn-sm"><x-icon name="rotate" class="h-3.5 w-3.5"/> Buka Kembali</button>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('interactions.close', $interaction) }}"
+                                  onsubmit="return confirm('Tutup interaksi ini? Riwayat follow up tetap tersimpan.')">
+                                @csrf
+                                <button class="btn-success btn-sm"><x-icon name="check" class="h-3.5 w-3.5"/> Close Interaction</button>
+                            </form>
+                        @endif
+                    @endcan
+                </div>
+
+                @if ($closed && $interaction->resolved_at)
+                    <p class="mb-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-500 dark:bg-white/5 dark:text-slate-400">
+                        Ditutup {{ $interaction->resolved_at->timezone('Asia/Jakarta')->translatedFormat('d M Y, H:i') }}
+                        @if ($interaction->resolver) oleh {{ $interaction->resolver->name }} @endif.
+                        Tidak lagi dihitung sebagai interaksi aktif — follow up baru akan membukanya lagi.
+                    </p>
+                @endif
+
+                {{-- History --}}
+                @if ($interaction->followUps->isNotEmpty())
+                    <ol class="mb-5 space-y-3">
+                        @foreach ($interaction->followUps->sortBy('created_at') as $i => $followUp)
+                            <li class="relative rounded-xl border border-slate-200 p-3 dark:border-white/10">
+                                <div class="flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="grid h-5 min-w-5 place-items-center rounded-full bg-brand-500/10 px-1.5 font-bold text-brand-600 dark:text-brand-300">{{ $loop->iteration }}</span>
+                                    @if ($followUp->action)
+                                        <span class="badge-violet"><x-icon :name="$followUp->action->icon()" class="h-3 w-3"/> {{ $followUp->action->label() }}</span>
+                                    @endif
+                                    <span class="font-semibold text-slate-700 dark:text-slate-200">{{ $followUp->user?->name ?? 'Sistem' }}</span>
+                                    <span class="text-slate-400">· {{ $followUp->created_at->timezone('Asia/Jakarta')->translatedFormat('d M Y, H:i') }}</span>
+                                    @if ($followUp->channel_used) <span class="text-slate-400">· via {{ $followUp->channel_used }}</span> @endif
+                                </div>
+                                @if ($followUp->response_text)
+                                    <p class="mt-2 whitespace-pre-line break-words text-sm text-slate-600 dark:text-slate-300">{{ $followUp->response_text }}</p>
+                                @endif
+                                @if ($followUp->next_action_at)
+                                    <p class="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                                        Tindak lanjut berikutnya: {{ $followUp->next_action_at->timezone('Asia/Jakarta')->translatedFormat('d M Y, H:i') }}
+                                    </p>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ol>
+                @else
+                    <p class="mb-4 text-xs text-slate-400">Belum ada follow up pada interaksi ini.</p>
+                @endif
+
+                @if ($interaction->ticket)
+                    <a href="{{ route('tickets.show', $interaction->ticket) }}"
+                       class="flex items-center gap-2 rounded-xl border border-brand-500/20 bg-brand-500/[0.05] p-3 text-sm text-slate-600 transition hover:bg-brand-500/10 dark:text-slate-300">
+                        <x-icon name="file-text" class="h-4 w-4 shrink-0 text-brand-500"/>
+                        Interaksi ini sudah menjadi tiket <strong class="font-mono">{{ $interaction->ticket->number }}</strong> —
+                        follow up berikutnya dicatat di tiket, supaya riwayatnya tidak terpecah dua.
+                        <span class="ml-auto shrink-0 text-xs font-semibold text-brand-600 dark:text-brand-300">Buka tiket →</span>
+                    </a>
+                @else
+                @can(\App\Enums\Permission::HandleInteractions->value)
+                    <form method="POST" action="{{ route('interactions.followUp', $interaction) }}"
+                          x-data="{ busy: false }" @submit="busy = true"
+                          class="space-y-3 rounded-xl bg-slate-50 p-4 dark:bg-white/[0.03]">
+                        @csrf
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            Tambah follow up #{{ $interaction->followUps->count() + 1 }}
+                        </p>
+
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <div>
+                                <label for="fu_action" class="label">Tindakan</label>
+                                <select id="fu_action" name="action" class="input" required>
+                                    @foreach ($followUpActions as $value => $label)
+                                        <option value="{{ $value }}" @selected(old('action') === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                @error('action') <p class="form-error">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label for="fu_channel" class="label">Lewat <span class="text-xs font-normal text-slate-400">(opsional)</span></label>
+                                <input id="fu_channel" name="channel_used" value="{{ old('channel_used') }}" maxlength="32"
+                                       class="input" placeholder="DM Instagram, WhatsApp, telepon…">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="fu_text" class="label">Catatan / balasan</label>
+                            <textarea id="fu_text" name="response_text" rows="3" maxlength="5000" required class="input"
+                                      placeholder="Apa yang disampaikan, dan apa jawabannya">{{ old('response_text') }}</textarea>
+                            @error('response_text') <p class="form-error">{{ $message }}</p> @enderror
+                        </div>
+
+                        <div class="flex flex-wrap items-end justify-between gap-3">
+                            <div>
+                                <label for="fu_next" class="label">Tindak lanjut berikutnya <span class="text-xs font-normal text-slate-400">(opsional)</span></label>
+                                <input id="fu_next" name="next_action_at" type="datetime-local" value="{{ old('next_action_at') }}" class="input">
+                            </div>
+
+                            <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                                <input type="checkbox" name="close" value="1"
+                                       class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40">
+                                Close setelah dicatat
+                            </label>
+
+                            <button class="btn-primary" :disabled="busy">
+                                <x-icon name="check" class="h-4 w-4"/>
+                                <span x-text="busy ? 'Menyimpan…' : 'Simpan Follow Up'">Simpan Follow Up</span>
+                            </button>
+                        </div>
+                    </form>
+                @endcan
+                @endif
+            </div>
+
         </div>
 
         {{-- ============================ Right: who and handling ============== --}}

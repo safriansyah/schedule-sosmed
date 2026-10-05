@@ -119,7 +119,7 @@ class ReportController extends Controller
             'regions' => $fromImport ? $this->stats->regionTree($user, $filters) : [],
             'regionLevels' => StudentStats::REGION_LEVELS,
             'regionLabels' => StudentStats::regionLabels(),
-            'sources' => TicketSource::options(),
+            'sources' => TicketSource::groupedOptions(),
             'stages' => TicketStatus::stages(),
             'statuses' => TicketStatus::options(),
             'flags' => $this->ticketStats($user),

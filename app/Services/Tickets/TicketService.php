@@ -4,12 +4,14 @@ namespace App\Services\Tickets;
 
 use App\Enums\AssignmentStatus;
 use App\Enums\FollowUpStatus;
+use App\Enums\GuestBookStatus;
 use App\Enums\InteractionStatus;
 use App\Enums\TicketFlag;
 use App\Enums\TicketSource;
 use App\Enums\TicketStatus;
 use App\Models\AccountMedia;
 use App\Models\FollowUp;
+use App\Models\GuestBookEntry;
 use App\Models\Interaction;
 use App\Models\Student;
 use App\Models\TicketDetail;
@@ -97,6 +99,81 @@ class TicketService
             $ticket,
             ['source' => $interaction->channel->value, 'interaction_id' => $interaction->getKey()],
         );
+
+        return $ticket;
+    }
+
+    /**
+     * "Add Ticket" on a Buku Tamu / Antrian entry.
+     *
+     * Idempotent like createFromInteraction(), and safe against a double
+     * click arriving as two parallel requests: the entry row is locked, so the
+     * second request waits, then finds the ticket the first one made. The
+     * unique index on guest_book_entries.ticket_id backs this up in the
+     * database itself.
+     *
+     * The visitor's answers are copied onto the ticket; the entry keeps its
+     * own record and is marked Ticketed, which takes it off the monitor.
+     */
+    public function createFromGuestBook(GuestBookEntry $entry, User $actor, ?User $assignee = null): Ticket
+    {
+        $ticket = DB::transaction(function () use ($entry, $actor) {
+            $locked = GuestBookEntry::whereKey($entry->getKey())->lockForUpdate()->firstOrFail();
+
+            if ($locked->ticket_id && ($existing = Ticket::find($locked->ticket_id))) {
+                return $existing;
+            }
+
+            // A NIM that matches the imported list links the ticket to that
+            // student, so it shows up on their record like any other ticket.
+            $student = $locked->nim ? Student::where('nim', $locked->nim)->first() : null;
+
+            $ticket = Ticket::createWithNumber([
+                'source' => TicketSource::GuestBook->value,
+                'subject' => "Antrian {$locked->displayNumber()} — {$locked->service->label()}",
+                'description' => $locked->description,
+                'status' => TicketStatus::Open->value,
+                'priority' => 'normal',
+                'flag' => TicketFlag::Netral->value,
+                'student_id' => $student?->id,
+                'requester_name' => $locked->name,
+                'requester_nim' => $locked->nim,
+                'requester_phone' => $locked->phone,
+                'source_created_at' => $locked->created_at,
+                'extra' => [
+                    'guest_book' => [
+                        'queue_date' => $locked->queue_date->toDateString(),
+                        'queue_number' => $locked->displayNumber(),
+                        'whatsapp' => $locked->whatsapp,
+                        'gender' => $locked->gender->label(),
+                        'service' => $locked->service->label(),
+                    ],
+                ],
+                'created_by' => $actor->id,
+            ]);
+
+            $locked->forceFill([
+                'ticket_id' => $ticket->id,
+                'status' => GuestBookStatus::Ticketed,
+                'handled_by' => $actor->id,
+                'finished_at' => now(),
+            ])->save();
+
+            $this->log->log(
+                'ticket.created',
+                "Membuat tiket {$ticket->number} dari antrian {$locked->displayNumber()} ({$locked->name})",
+                $ticket,
+                ['source' => TicketSource::GuestBook->value, 'guest_book_entry_id' => $locked->id],
+            );
+
+            return $ticket;
+        });
+
+        if ($assignee && $ticket->assigned_to === null) {
+            $ticket = $this->assign($ticket, $assignee, $actor);
+        }
+
+        $entry->refresh();
 
         return $ticket;
     }

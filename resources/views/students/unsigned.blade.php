@@ -260,12 +260,8 @@
                     <label for="operator_region" class="label">Operator</label>
                     <select id="operator_region" name="operator_id" class="input" required>
                         <option value="">Pilih operator…</option>
-                        @foreach ($operators as $operator)
-                            @php $load = $workload->firstWhere('user_id', $operator->id); @endphp
-                            <option value="{{ $operator->id }}">
-                                {{ $operator->name }} — {{ number_format($load->total ?? 0) }} mahasiswa
-                            </option>
-                        @endforeach
+                        <x-operator-options :operators="$operators"
+                            :suffix="fn ($op) => number_format($workload->firstWhere('user_id', $op->id)->total ?? 0).' mahasiswa'"/>
                     </select>
                     @error('operator_id') <p class="form-error">{{ $message }}</p> @enderror
                 </div>
@@ -333,9 +329,7 @@
 
                     <select name="operator_id" class="input w-48" required>
                         <option value="">Pilih operator…</option>
-                        @foreach ($operators as $operator)
-                            <option value="{{ $operator->id }}">{{ $operator->name }}</option>
-                        @endforeach
+                        <x-operator-options :operators="$operators"/>
                     </select>
 
                     <button class="btn-primary" x-bind:disabled="count === 0">

@@ -95,6 +95,12 @@ class Ticket extends Model
         return $this->belongsTo(Interaction::class);
     }
 
+    /** The queue entry this ticket was made from (source Buku Tamu). */
+    public function guestBookEntry(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(GuestBookEntry::class);
+    }
+
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');

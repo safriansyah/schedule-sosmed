@@ -340,8 +340,9 @@ it('publishes a public task without exposing anything internal', function () {
         'is_public' => true,
     ]);
 
-    // No login at all — this page is public by design.
-    $response = $this->get(route('public.tasks'));
+    // Jadwal kegiatan now needs a login, but stays whitelisted: even a
+    // signed-in viewer sees only the public fields.
+    $response = $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())->get(route('public.tasks'));
 
     $response->assertOk()
         ->assertSee('Sosialisasi Registrasi Mahasiswa')
@@ -383,7 +384,7 @@ it('never leaks student data on the public task page', function () {
         'is_public' => true,
     ]);
 
-    $response = $this->get(route('public.tasks'));
+    $response = $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())->get(route('public.tasks'));
 
     $response->assertOk()
         ->assertSee('Kegiatan Publik')
@@ -405,7 +406,7 @@ it('hides private tasks from the public page', function () {
         'is_public' => false,
     ]);
 
-    $this->get(route('public.tasks'))
+    $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())->get(route('public.tasks'))
         ->assertOk()
         ->assertDontSee('Rapat Internal Tim');
 });

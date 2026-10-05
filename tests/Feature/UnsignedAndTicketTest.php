@@ -364,9 +364,11 @@ it('hides the reports from a role that may not read them', function () {
  | Follow up lives in the ticket only
  * ----------------------------------------------------------------- */
 
-it('has no follow-up route outside a ticket', function () {
-    expect(\Illuminate\Support\Facades\Route::has('interactions.followUp'))->toBeFalse()
-        ->and(\Illuminate\Support\Facades\Route::has('tickets.followUp'))->toBeTrue();
+it('keeps ticket follow-up, alongside the inbox follow-up for comments not yet ticketed', function () {
+    // Interactions take follow-ups again until they become a ticket (see
+    // CrmInboxTest); a ticket's own follow-up route is unchanged.
+    expect(\Illuminate\Support\Facades\Route::has('tickets.followUp'))->toBeTrue()
+        ->and(\Illuminate\Support\Facades\Route::has('interactions.followUp'))->toBeTrue();
 });
 
 it('lets one ticket carry unlimited follow ups', function () {

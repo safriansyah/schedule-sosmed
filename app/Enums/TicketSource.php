@@ -19,6 +19,10 @@ enum TicketSource: string
     case Manual = 'manual';
     case Other = 'other';
 
+    // Antrian layanan tatap muka. Only ever set by "Add Ticket" on a guest
+    // book entry, never chosen by hand — see manualOptions().
+    case GuestBook = 'buku_tamu';
+
     public function label(): string
     {
         return match ($this) {
@@ -29,6 +33,7 @@ enum TicketSource: string
             self::StudentImport => 'Import Mahasiswa',
             self::Manual => 'Manual',
             self::Other => 'Lainnya',
+            self::GuestBook => 'Buku Tamu / Antrian',
         };
     }
 
@@ -42,6 +47,7 @@ enum TicketSource: string
             self::StudentImport => 'upload',
             self::Manual => 'edit',
             self::Other => 'hash',
+            self::GuestBook => 'id-card',
         };
     }
 
@@ -53,6 +59,7 @@ enum TicketSource: string
             self::StudentImport => 'badge-cyan',
             self::Manual => 'badge-blue',
             self::Other => 'badge-slate',
+            self::GuestBook => 'badge-violet',
         };
     }
 
@@ -72,5 +79,53 @@ enum TicketSource: string
     public static function options(): array
     {
         return collect(self::cases())->mapWithKeys(fn (self $s) => [$s->value => $s->label()])->all();
+    }
+
+    /**
+     * The family a source belongs to, for grouped pickers and reports: walk-in
+     * queue, social comments, the student list, or everything else.
+     */
+    public function group(): string
+    {
+        return match (true) {
+            $this === self::GuestBook => 'Buku Tamu / Antrian',
+            $this->isSocial() => 'Komentar Sosial Media',
+            $this === self::StudentImport => 'Mahasiswa',
+            default => 'Lainnya',
+        };
+    }
+
+    /**
+     * Options grouped by family: [group => [value => label]].
+     *
+     * @return array<string, array<string, string>>
+     */
+    public static function groupedOptions(bool $manualOnly = false): array
+    {
+        $groups = [];
+
+        foreach (self::cases() as $source) {
+            if ($manualOnly && $source === self::GuestBook) {
+                continue;
+            }
+
+            $groups[$source->group()][$source->value] = $source->label();
+        }
+
+        $order = ['Buku Tamu / Antrian', 'Komentar Sosial Media', 'Mahasiswa', 'Lainnya'];
+
+        return array_replace(array_intersect_key(array_flip($order), $groups), $groups);
+    }
+
+    /**
+     * Sources an operator may pick when typing a ticket in. Buku Tamu is left
+     * out: such a ticket only exists through "Add Ticket" on a queue entry,
+     * which records the link back to it.
+     *
+     * @return array<string, string>
+     */
+    public static function manualOptions(): array
+    {
+        return array_diff_key(self::options(), [self::GuestBook->value => true]);
     }
 }

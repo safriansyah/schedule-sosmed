@@ -178,6 +178,7 @@ enum RoleName: string
                 Permission::CreateTickets,
                 Permission::HandleTickets,
                 Permission::EditTickets,
+                Permission::ManageGuestBook,
                 Permission::AssignTickets,
                 Permission::CloseTickets,
                 Permission::ManageTicketCategories,
@@ -202,6 +203,7 @@ enum RoleName: string
                 Permission::CreateTickets,
                 Permission::HandleTickets,
                 Permission::EditTickets,
+                Permission::ManageGuestBook,
                 // Whoever works a ticket finishes it. Closing demands a
                 // resolution note and is the natural end of the follow-up the
                 // handler is already doing, so withholding it left a PIC able
@@ -264,6 +266,7 @@ enum RoleName: string
                 Permission::CreateTickets,
                 Permission::HandleTickets,
                 Permission::EditTickets,
+                Permission::ManageGuestBook,
                 Permission::CloseTickets,
                 Permission::ViewTasks,
                 Permission::ExportData,

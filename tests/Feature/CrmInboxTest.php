@@ -195,13 +195,28 @@ it('keeps the inbox away from roles that do not handle it', function () {
 });
 
 /*
- * Follow-up used to be recorded on the interaction itself. It is not any more:
- * the same comment could then be followed up here AND on its ticket, leaving
- * two histories that never met, so the next operator would repeat a call that
- * had already happened. The inbox now only routes a comment into a ticket.
+ * Follow-up on the interaction is back (repeatable, then Close), but the
+ * reason it was once removed still holds: a comment followed up here AND on
+ * its ticket leaves two histories that never meet. So once a ticket exists,
+ * the interaction refuses follow-ups and points at the ticket instead.
  */
-it('no longer exposes a follow-up endpoint on the inbox', function () {
-    expect(\Illuminate\Support\Facades\Route::has('interactions.followUp'))->toBeFalse();
+it('takes follow-ups on the inbox only until the comment becomes a ticket', function () {
+    $interaction = makeInteraction();
+    $operator = asRole(RoleName::Operator);
+
+    $this->actingAs($operator)->post(route('interactions.followUp', $interaction), [
+        'action' => 'dibalas', 'response_text' => 'Sudah dibalas lewat DM.',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($interaction->followUps()->count())->toBe(1);
+
+    app(\App\Services\Tickets\TicketService::class)->createFromInteraction($interaction->refresh(), $operator);
+
+    $this->actingAs($operator)->post(route('interactions.followUp', $interaction), [
+        'action' => 'dibalas', 'response_text' => 'Follow up kedua.',
+    ])->assertSessionHasErrors('response_text');
+
+    expect($interaction->followUps()->count())->toBe(1);
 });
 
 it('offers ticket creation and nothing else to handle with', function () {

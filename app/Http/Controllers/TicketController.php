@@ -7,7 +7,6 @@ use App\Enums\FollowUpOutcome;
 use App\Enums\Permission;
 use App\Enums\FollowUpStatus;
 use App\Enums\Priority;
-use App\Enums\RoleName;
 use App\Enums\TicketFlag;
 use App\Enums\TicketSource;
 use App\Enums\TicketStatus;
@@ -75,7 +74,7 @@ class TicketController extends Controller
             'stats' => $this->stats($user),
             'statuses' => TicketStatus::options(),
             'priorities' => Priority::options(),
-            'sources' => TicketSource::options(),
+            'sources' => TicketSource::groupedOptions(),
             'flags' => TicketFlag::options(),
             'categories' => TicketCategory::roots()->active()->ordered()->get(),
             'operators' => $this->operators(),
@@ -97,7 +96,7 @@ class TicketController extends Controller
             'categories' => TicketCategory::roots()->active()->ordered()->with('children')->get(),
             'statuses' => TicketStatus::options(),
             'priorities' => Priority::options(),
-            'sources' => TicketSource::options(),
+            'sources' => TicketSource::groupedOptions(manualOnly: true),
             'flags' => TicketFlag::options(),
             'operators' => $this->operators(),
             'student' => $request->filled('student')
@@ -119,7 +118,9 @@ class TicketController extends Controller
         $data = $request->validate([
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:10000'],
-            'source' => ['required', 'string', 'max:32'],
+            // Only sources an operator may pick by hand; Buku Tamu comes from
+            // "Add Ticket" on a queue entry and nowhere else.
+            'source' => ['required', 'string', \Illuminate\Validation\Rule::in(array_keys(TicketSource::manualOptions()))],
             'category_id' => ['nullable', 'integer', 'exists:ticket_categories,id'],
             'sub_category_id' => ['nullable', 'integer', 'exists:ticket_categories,id'],
             'priority' => ['required', 'string', 'max:16'],
@@ -131,7 +132,7 @@ class TicketController extends Controller
             'requester_phone' => ['nullable', 'string', 'max:32'],
             'requester_email' => ['nullable', 'email', 'max:255'],
             'due_at' => ['nullable', 'date'],
-            'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
+            'assigned_to' => ['nullable', 'integer', User::ticketHandlerRule()],
             'attachment' => ['nullable', 'file', 'max:10240'],
             'number_format' => ['nullable', 'string', 'max:8'],
         ], [], [
@@ -193,7 +194,7 @@ class TicketController extends Controller
 
         $ticket->load([
             'category', 'subCategory', 'assignee:id,name', 'creator:id,name', 'closer:id,name',
-            'student', 'contact', 'interaction',
+            'student', 'contact', 'interaction', 'guestBookEntry',
             // The whole row, not three columns: the "Detail Mahasiswa"
             // block renders every field the import carries, and a
             // narrowed select would silently blank most of them.
@@ -256,7 +257,7 @@ class TicketController extends Controller
         $this->authorize(Permission::AssignTickets->value);
 
         $data = $request->validate([
-            'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
+            'assigned_to' => ['nullable', 'integer', User::ticketHandlerRule()],
             'note' => ['nullable', 'string', 'max:512'],
         ], [], ['assigned_to' => 'operator']);
 
@@ -560,25 +561,13 @@ class TicketController extends Controller
     }
 
     /**
-     * Everyone a ticket can be handed to. Operator Follow Up is included: it
-     * is the role that exists only to work tickets assigned to it.
+     * Everyone a ticket can be handed to — the shared list, so the student
+     * hand-out on /students/unsigned offers exactly the same people.
      *
      * @return \Illuminate\Support\Collection<int, User>
      */
     private function operators()
     {
-        $roles = array_map(fn (RoleName $r) => $r->value, [
-            RoleName::FollowUp, RoleName::Operator, RoleName::Pic, RoleName::Manager, RoleName::SuperAdmin,
-        ]);
-
-        return User::query()
-            ->active()
-            ->whereHas('role', fn ($q) => $q->whereIn('name', $roles))
-            ->with('role:id,name,label')
-            ->orderBy('name')
-            ->get(['id', 'name', 'role_id'])
-            // Grouped by role in the dropdown, in the order listed above.
-            ->sortBy(fn (User $u) => array_search($u->role?->name?->value, $roles, true))
-            ->values();
+        return User::ticketHandlerOptions();
     }
 }

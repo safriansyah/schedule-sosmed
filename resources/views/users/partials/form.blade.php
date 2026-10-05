@@ -85,6 +85,66 @@
         @endif
     </div>
 
+    {{-- Jadwal login — Super Admin only, and not on their own account (see
+         UserController::applyLoginSchedule). Checked on the server at login
+         and on every request, in WIB. --}}
+    @if (auth()->user()->isSuperAdmin() && ! $self)
+        @php
+            $scheduleOn = (bool) old('login_schedule_enabled', $user?->login_schedule_enabled ?? false);
+        @endphp
+        <div class="card p-6" x-data="{ on: @js($scheduleOn) }">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Jadwal Login</p>
+                    <p class="mt-0.5 text-xs text-slate-400">
+                        Batasi kapan akun ini boleh login. Di luar jadwal, login ditolak dan sesi yang sedang terbuka ikut keluar.
+                        Zona waktu: <strong>WIB (Asia/Jakarta)</strong>.
+                    </p>
+                </div>
+
+                <label class="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                    <input type="hidden" name="login_schedule_enabled" value="0">
+                    <input type="checkbox" name="login_schedule_enabled" value="1" x-model="on"
+                           class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/40 dark:border-white/20 dark:bg-ink-850">
+                    Aktifkan pembatasan
+                </label>
+            </div>
+            @error('login_schedule_enabled') <p class="form-error">{{ $message }}</p> @enderror
+
+            <div class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4" :class="on ? '' : 'pointer-events-none opacity-50'">
+                <div>
+                    <label for="login_start_date" class="label">Tanggal mulai</label>
+                    <input id="login_start_date" name="login_start_date" type="date" class="input"
+                           value="{{ old('login_start_date', $user?->login_start_date?->format('Y-m-d')) }}">
+                    @error('login_start_date') <p class="form-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="login_end_date" class="label">Tanggal selesai</label>
+                    <input id="login_end_date" name="login_end_date" type="date" class="input"
+                           value="{{ old('login_end_date', $user?->login_end_date?->format('Y-m-d')) }}">
+                    @error('login_end_date') <p class="form-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="login_start_time" class="label">Jam mulai</label>
+                    <input id="login_start_time" name="login_start_time" type="time" class="input"
+                           value="{{ old('login_start_time', $user?->login_start_time ? substr($user->login_start_time, 0, 5) : '') }}">
+                    @error('login_start_time') <p class="form-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="login_end_time" class="label">Jam selesai</label>
+                    <input id="login_end_time" name="login_end_time" type="time" class="input"
+                           value="{{ old('login_end_time', $user?->login_end_time ? substr($user->login_end_time, 0, 5) : '') }}">
+                    @error('login_end_time') <p class="form-error">{{ $message }}</p> @enderror
+                </div>
+            </div>
+
+            <p class="mt-3 text-[11px] text-slate-400">
+                Kosongkan tanggal untuk berlaku setiap hari; kosongkan jam untuk sepanjang hari.
+                Jam seperti 22:00–06:00 dibaca melewati tengah malam.
+            </p>
+        </div>
+    @endif
+
     <div class="card p-6">
         <p class="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Kata Sandi</p>
         <p class="mb-4 text-xs text-slate-400">

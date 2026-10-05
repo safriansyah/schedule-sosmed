@@ -21,6 +21,7 @@ use App\Services\AI\ClassifierManager;
 use App\Support\PhoneNumber;
 use App\Services\Crm\ContactResolver;
 use App\Services\Crm\InboxSummary;
+use App\Services\Crm\InteractionHandling;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -74,12 +75,21 @@ class InteractionController extends Controller
         $tabs = $this->visibleTabs($request->user());
         $tab = array_key_exists($request->input('tab'), $tabs) ? $request->input('tab') : 'urgent';
 
-        $interactions = $this->query($request, $tab)
-            ->with(['contact:id,code,full_name,display_name,status,phone_e164', 'assignee:id,name', 'ticket:id,interaction_id,number'])
-            ->paginate(25)
-            ->withQueryString();
+        // "Per akun": one row per Instagram account instead of one per
+        // comment, so a person who commented twelve times is one line to
+        // open, not twelve to scroll past.
+        $view = $request->input('view') === 'account' ? 'account' : 'list';
+
+        $interactions = $view === 'list'
+            ? $this->query($request, $tab)
+                ->with(['contact:id,code,full_name,display_name,status,phone_e164', 'assignee:id,name', 'ticket:id,interaction_id,number'])
+                ->paginate(25)
+                ->withQueryString()
+            : null;
 
         return view('interactions.index', [
+            'view' => $view,
+            'accounts' => $view === 'account' ? $this->accountGroups($request, $tab) : null,
             'interactions' => $interactions,
             'tab' => $tab,
             'tabs' => $tabs,
@@ -90,7 +100,7 @@ class InteractionController extends Controller
             'intents' => Intent::options(),
             'statuses' => InteractionStatus::options(),
             'assignees' => $this->assignableUsers(),
-            'filters' => $request->only('tab', 'q', 'channel', 'sentiment', 'intent', 'status', 'handler'),
+            'filters' => $request->only('tab', 'q', 'channel', 'sentiment', 'intent', 'status', 'handler', 'view'),
             'canSeeAllTasks' => $request->user()->hasPermission(Permission::ViewAllInteractions),
         ]);
     }
@@ -100,7 +110,7 @@ class InteractionController extends Controller
         $this->authorize(Permission::ViewInteractions->value);
 
         $interaction->load([
-            'contact.identities', 'contact.region', 'assignee', 'resolver', 'overrider',
+            'contact.identities', 'contact.region', 'assignee', 'resolver', 'overrider', 'followUps.user:id,name',
             'source', 'ticket:id,interaction_id,number,status',
         ]);
 
@@ -130,6 +140,7 @@ class InteractionController extends Controller
             // The shared <x-contact-form> lives in this page's sidebar, so it
             // needs the same option list the contact page gives it.
             'owners' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'followUpActions' => FollowUpAction::options(),
         ]);
     }
 
@@ -339,6 +350,7 @@ class InteractionController extends Controller
         $status = match ($data['action']) {
             'in_progress' => InteractionStatus::InProgress,
             'done' => InteractionStatus::Done,
+            'close' => InteractionStatus::Closed,
             'ignore' => InteractionStatus::Ignored,
         };
 
@@ -380,6 +392,134 @@ class InteractionController extends Controller
             '%d interaksi dinilai — %d mendesak. (%d dari cache, %d dari AI)',
             $stats['classified'], $stats['urgent'], $stats['from_cache'], $stats['from_llm'],
         ));
+    }
+
+    /* -----------------------------------------------------------------
+     | Per akun, Follow Up & Close
+     * ----------------------------------------------------------------- */
+
+    /**
+     * Everything one account has sent, newest first — loaded when a group is
+     * expanded on the "Per akun" view. The whole history, not just the rows
+     * matching the current tab: the point is to see the person in full.
+     */
+    public function account(Request $request): View
+    {
+        $this->authorize(Permission::ViewInteractions->value);
+
+        $data = $request->validate([
+            'channel' => ['required', \Illuminate\Validation\Rule::enum(SocialPlatform::class)],
+            'handle' => ['nullable', 'string', 'max:191'],
+        ]);
+
+        $interactions = Interaction::query()
+            ->inbound()
+            ->where('channel', $data['channel'])
+            ->when(filled($data['handle'] ?? null),
+                fn ($q) => $q->where('author_handle', $data['handle']),
+                fn ($q) => $q->whereNull('author_handle'))
+            ->with(['contact:id,code,full_name,display_name,status,phone_e164', 'assignee:id,name', 'ticket:id,interaction_id,number'])
+            ->withCount('followUps')
+            ->latest('occurred_at')
+            ->limit(100)
+            ->get();
+
+        return view('interactions.partials.account-rows', ['interactions' => $interactions]);
+    }
+
+    /** One more follow-up on the conversation. Repeatable without limit. */
+    public function followUp(Request $request, Interaction $interaction, InteractionHandling $handling): RedirectResponse
+    {
+        $this->authorize(Permission::HandleInteractions->value);
+
+        $data = $request->validate([
+            'action' => ['required', \Illuminate\Validation\Rule::enum(FollowUpAction::class)],
+            'response_text' => ['required', 'string', 'max:5000'],
+            'channel_used' => ['nullable', 'string', 'max:32'],
+            'next_action_at' => ['nullable', 'date'],
+            'close' => ['nullable', 'boolean'],
+        ], [], [
+            'action' => 'tindakan',
+            'response_text' => 'catatan follow up',
+        ]);
+
+        // Once a comment has become a ticket, its follow-up lives there: two
+        // histories for one conversation is how a call gets made twice.
+        if ($ticket = $interaction->ticket) {
+            return back()->withErrors([
+                'response_text' => "Interaksi ini sudah menjadi tiket {$ticket->number}. Catat follow up di tiket tersebut.",
+            ]);
+        }
+
+        $handling->followUp($interaction, $data + ['close' => $request->boolean('close')], $request->user());
+
+        return back()->with('success', $request->boolean('close')
+            ? 'Follow up dicatat dan interaksi ditutup (Closed).'
+            : 'Follow up dicatat.');
+    }
+
+    public function close(Request $request, Interaction $interaction, InteractionHandling $handling): RedirectResponse
+    {
+        $this->authorize(Permission::HandleInteractions->value);
+
+        $handling->close($interaction, $request->user());
+
+        return back()->with('success', 'Interaksi ditutup (Closed). Riwayatnya tetap tersimpan.');
+    }
+
+    public function reopen(Request $request, Interaction $interaction, InteractionHandling $handling): RedirectResponse
+    {
+        $this->authorize(Permission::HandleInteractions->value);
+
+        $handling->reopen($interaction, $request->user());
+
+        return back()->with('success', 'Interaksi dibuka kembali.');
+    }
+
+    /** "Close semua" on a group of the "Per akun" view. */
+    public function closeAccount(Request $request, InteractionHandling $handling): RedirectResponse
+    {
+        $this->authorize(Permission::HandleInteractions->value);
+
+        $data = $request->validate([
+            'channel' => ['required', \Illuminate\Validation\Rule::enum(SocialPlatform::class)],
+            'handle' => ['nullable', 'string', 'max:191'],
+        ]);
+
+        $handle = filled($data['handle'] ?? null) ? $data['handle'] : null;
+        $count = $handling->closeAccount(SocialPlatform::from($data['channel']), $handle, $request->user());
+
+        return back()->with('success', $count > 0
+            ? "{$count} interaksi dari ".($handle ? '@'.$handle : 'akun ini').' ditutup (Closed).'
+            : 'Tidak ada interaksi terbuka dari akun ini.');
+    }
+
+    /**
+     * The "Per akun" list: the current tab and filters, grouped by account.
+     * Accounts with something urgent come first, then the most recent.
+     */
+    private function accountGroups(Request $request, string $tab)
+    {
+        $open = implode(',', array_map(
+            fn (InteractionStatus $s) => DB::getPdo()->quote($s->value),
+            [InteractionStatus::New, InteractionStatus::InProgress],
+        ));
+
+        return $this->query($request, $tab)
+            ->reorder()
+            ->selectRaw('channel, author_handle')
+            ->selectRaw('COUNT(*) AS total')
+            ->selectRaw('MAX(occurred_at) AS last_at')
+            ->selectRaw("SUM(CASE WHEN status IN ({$open}) THEN 1 ELSE 0 END) AS open_count")
+            ->selectRaw('MAX(is_urgent) AS any_urgent')
+            ->selectRaw('MAX(author_name) AS author_name')
+            ->selectRaw('MAX(author_avatar) AS author_avatar')
+            ->selectRaw('MAX(author_avatar_path) AS author_avatar_path')
+            ->groupBy('channel', 'author_handle')
+            ->orderByDesc('any_urgent')
+            ->orderByDesc('last_at')
+            ->paginate(25)
+            ->withQueryString();
     }
 
     /* -----------------------------------------------------------------
@@ -451,6 +591,7 @@ class InteractionController extends Controller
                 InteractionStatus::Replied->value,
                 InteractionStatus::Done->value,
                 InteractionStatus::Ignored->value,
+                InteractionStatus::Closed->value,
             ]),
             default => $query,
         };

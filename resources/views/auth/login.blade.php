@@ -47,5 +47,18 @@
             <x-icon name="logout" class="h-4 w-4 rotate-180"/>
             Masuk
         </button>
+
+        {{-- Public, no login needed: for visitors at the service desk. --}}
+        <div class="mt-6 border-t border-slate-100 pt-5 dark:border-white/5">
+            <p class="mb-3 text-center text-xs font-medium text-slate-400">Untuk tamu &amp; mahasiswa — tanpa login</p>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <a href="{{ route('guest-book.create') }}" class="btn-outline w-full">
+                    <x-icon name="id-card" class="h-4 w-4"/> Buku Tamu / Antrian
+                </a>
+                <a href="{{ route('guest-book.monitor') }}" class="btn-outline w-full">
+                    <x-icon name="monitor" class="h-4 w-4"/> Monitor Buku Tamu / Antrian
+                </a>
+            </div>
+        </div>
     </form>
 </x-layouts.guest>

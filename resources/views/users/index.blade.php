@@ -63,11 +63,14 @@
                         @endif
                     </div>
 
-                    <p class="mt-3">
+                    <p class="mt-3 flex flex-wrap gap-1.5">
                         <span class="badge-blue">
                             <x-icon :name="$user->role?->name?->icon() ?? 'users'" class="h-3 w-3"/>
                             {{ $user->roleLabel() }}
                         </span>
+                        @if ($schedule = $user->loginScheduleLabel())
+                            <span class="badge-amber" title="Jadwal login"><x-icon name="clock" class="h-3 w-3"/> {{ $schedule }}</span>
+                        @endif
                     </p>
 
                     <div class="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-white/5">
@@ -142,6 +145,9 @@
                                         <span class="badge-green">Aktif</span>
                                     @else
                                         <span class="badge-red"><x-icon name="ban" class="h-3 w-3"/> Disable</span>
+                                    @endif
+                                    @if ($schedule = $user->loginScheduleLabel())
+                                        <span class="badge-amber mt-1 whitespace-nowrap" title="Jadwal login"><x-icon name="clock" class="h-3 w-3"/> {{ $schedule }}</span>
                                     @endif
                                 </td>
 

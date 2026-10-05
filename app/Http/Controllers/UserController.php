@@ -55,6 +55,7 @@ class UserController extends Controller
         // Guarded against mass assignment — set explicitly.
         $user->role_id = $request->integer('role_id');
         $user->is_active = $request->boolean('is_active');
+        $this->applyLoginSchedule($user, $request);
 
         $user->save();
 
@@ -90,6 +91,8 @@ class UserController extends Controller
             ? true
             : $request->boolean('is_active');
 
+        $this->applyLoginSchedule($user, $request);
+
         $user->save();
 
         $this->log->log('user.updated', "Pengguna {$user->name} diperbarui", $user);
@@ -97,6 +100,27 @@ class UserController extends Controller
         return redirect()
             ->route('users.index')
             ->with('toast', ['message' => 'Pengguna diperbarui.', 'type' => 'success']);
+    }
+
+    /**
+     * Jadwal login. Only a Super Admin sets it, and never on their own account:
+     * a schedule that closes while they are the last admin would lock everyone
+     * out of the place where it can be changed back. Anyone else submitting the
+     * form leaves the existing schedule exactly as it was.
+     */
+    private function applyLoginSchedule(User $user, UserRequest $request): void
+    {
+        if (! $request->user()->isSuperAdmin() || $user->is($request->user())) {
+            return;
+        }
+
+        $user->forceFill([
+            'login_schedule_enabled' => $request->boolean('login_schedule_enabled'),
+            'login_start_date' => $request->input('login_start_date') ?: null,
+            'login_end_date' => $request->input('login_end_date') ?: null,
+            'login_start_time' => $request->input('login_start_time') ?: null,
+            'login_end_time' => $request->input('login_end_time') ?: null,
+        ]);
     }
 
     /**

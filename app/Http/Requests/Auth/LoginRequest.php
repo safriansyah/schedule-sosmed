@@ -50,11 +50,27 @@ class LoginRequest extends FormRequest
         // so we never reveal whether the email exists.
         $credentials = [...$this->only('email', 'password'), 'is_active' => true];
 
-        if (! Auth::attempt($credentials, $this->boolean('remember'))) {
+        // Jadwal login: checked only once the password has proved correct, so
+        // the specific message below is shown only to the account's owner.
+        $outsideSchedule = false;
+
+        $allowed = Auth::attemptWhen($credentials, function ($user) use (&$outsideSchedule) {
+            if ($user->loginAllowedAt(now())) {
+                return true;
+            }
+
+            $outsideSchedule = true;
+
+            return false;
+        }, $this->boolean('remember'));
+
+        if (! $allowed) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => 'Email atau kata sandi salah, atau akun Anda dinonaktifkan.',
+                'email' => $outsideSchedule
+                    ? 'Akses login Anda berada di luar jadwal yang telah ditentukan.'
+                    : 'Email atau kata sandi salah, atau akun Anda dinonaktifkan.',
             ]);
         }
 

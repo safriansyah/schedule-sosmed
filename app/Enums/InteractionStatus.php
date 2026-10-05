@@ -16,6 +16,11 @@ enum InteractionStatus: string
     case Done = 'done';
     case Ignored = 'ignored';
 
+    // "Close Interaction": handling of this conversation is finished. Not a
+    // deletion — the row, its follow-ups and its history all stay, and a new
+    // follow-up opens it again.
+    case Closed = 'closed';
+
     public function label(): string
     {
         return match ($this) {
@@ -24,6 +29,7 @@ enum InteractionStatus: string
             self::Replied => 'Dibalas',
             self::Done => 'Selesai',
             self::Ignored => 'Diabaikan',
+            self::Closed => 'Closed',
         };
     }
 
@@ -35,6 +41,7 @@ enum InteractionStatus: string
             self::Replied => 'badge-blue',
             self::Done => 'badge-green',
             self::Ignored => 'badge-slate',
+            self::Closed => 'badge-slate',
         };
     }
 
@@ -46,6 +53,7 @@ enum InteractionStatus: string
             self::Replied => 'reply',
             self::Done => 'check-circle',
             self::Ignored => 'ban',
+            self::Closed => 'check-circle',
         };
     }
 

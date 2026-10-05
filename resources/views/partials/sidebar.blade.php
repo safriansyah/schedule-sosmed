@@ -59,6 +59,14 @@
          */
         'Penanganan' => [
             [
+                'label' => 'Buku Tamu / Antrian', 'icon' => 'id-card', 'active' => 'guest-book.admin.*',
+                'children' => [
+                    ['route' => 'guest-book.admin.index', 'label' => 'Antrian Hari Ini', 'active' => 'guest-book.admin.*', 'can' => Permission::ManageGuestBook],
+                    ['route' => 'guest-book.monitor', 'label' => 'Monitor Antrian', 'active' => 'guest-book.monitor', 'can' => Permission::ManageGuestBook],
+                    ['route' => 'guest-book.create', 'label' => 'Form Buku Tamu', 'active' => 'guest-book.create', 'can' => Permission::ManageGuestBook],
+                ],
+            ],
+            [
                 'label' => 'Ticketing', 'icon' => 'file-text', 'active' => 'tickets.*|reports.tickets',
                 'children' => [
                     ['route' => 'tickets.index', 'label' => 'Semua Tiket', 'active' => 'tickets.index|tickets.show|tickets.create', 'can' => Permission::ViewTickets],

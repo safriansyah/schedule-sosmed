@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
 class BulkInteractionRequest extends FormRequest
 {
     /** Actions that may be applied to a whole selection. */
-    public const ACTIONS = ['assign', 'in_progress', 'done', 'ignore', 'reclassify'];
+    public const ACTIONS = ['assign', 'in_progress', 'done', 'close', 'ignore', 'reclassify'];
 
     public function authorize(): bool
     {

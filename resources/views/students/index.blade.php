@@ -131,11 +131,7 @@
                     <select id="operator" name="operator" class="input">
                         <option value="">Semua operator</option>
                         <option value="0" @selected(($filters['operator'] ?? '') === '0')>— Belum assigned —</option>
-                        @foreach ($operators as $operator)
-                            <option value="{{ $operator->id }}" @selected((string) ($filters['operator'] ?? '') === (string) $operator->id)>
-                                {{ $operator->name }}
-                            </option>
-                        @endforeach
+                        <x-operator-options :operators="$operators" :selected="($filters['operator'] ?? '') === '0' ? null : ($filters['operator'] ?? null)"/>
                     </select>
                 </div>
             </div>

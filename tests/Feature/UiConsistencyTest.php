@@ -132,8 +132,14 @@ it('renders every page for every role without a server error', function () {
     expect($failures)->toBe([]);
 });
 
-it('keeps the public task page reachable without logging in', function () {
-    $this->get(route('public.tasks'))->assertOk();
+it('keeps jadwal kegiatan behind a login now', function () {
+    $this->get(route('public.tasks'))->assertRedirect(route('login'));
+});
+
+it('keeps the guest book form and monitor reachable without logging in', function () {
+    $this->get(route('guest-book.create'))->assertOk();
+    $this->get(route('guest-book.monitor'))->assertOk();
+    $this->getJson(route('guest-book.monitor.feed'))->assertOk()->assertJsonStructure(['now', 'waiting', 'served_today']);
 });
 
 it('sends a guest to the login page, not to an error', function () {

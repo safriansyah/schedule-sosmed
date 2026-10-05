@@ -11,9 +11,11 @@ use App\Http\Controllers\ContentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatasetController;
 use App\Http\Controllers\DatasetItemController;
+use App\Http\Controllers\GuestBookController;
 use App\Http\Controllers\InteractionController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PublicGuestBookController;
 use App\Http\Controllers\PublicTaskController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsController;
@@ -40,12 +42,22 @@ Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'logi
 | Public
 |--------------------------------------------------------------------------
 |
-| The only page reachable without logging in. It renders `is_public` tasks
-| through a whitelist — see PublicTaskController for why that is three layers
-| deep.
+| Buku Tamu / Antrian: the form a visitor fills in to take a queue number,
+| and the monitor for the waiting room's TV. Neither needs a login, and
+| neither exposes more than PublicGuestBookController whitelists.
+|
+| Submitting is throttled per IP (loosely: a whole campus Wi-Fi shares one
+| address); the monitor's feed is polled every few seconds by every screen
+| showing it, so it gets a far higher allowance.
 |
 */
-Route::get('jadwal-kegiatan', [PublicTaskController::class, 'index'])->name('public.tasks');
+Route::prefix('guest-book')->name('guest-book.')->group(function () {
+    Route::get('/', [PublicGuestBookController::class, 'create'])->name('create');
+    Route::post('/', [PublicGuestBookController::class, 'store'])->middleware('throttle:20,1')->name('store');
+    Route::get('selesai', [PublicGuestBookController::class, 'done'])->name('done');
+    Route::get('monitor', [PublicGuestBookController::class, 'monitor'])->name('monitor');
+    Route::get('monitor/feed', [PublicGuestBookController::class, 'feed'])->middleware('throttle:600,1')->name('monitor.feed');
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -108,6 +120,8 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:6,1')->name('interactions.classify');
     Route::post('interactions/bulk', [InteractionController::class, 'bulk'])->name('interactions.bulk');
     Route::get('interactions/accuracy', [InteractionController::class, 'accuracy'])->name('interactions.accuracy');
+    Route::get('interactions/account', [InteractionController::class, 'account'])->name('interactions.account');
+    Route::post('interactions/account/close', [InteractionController::class, 'closeAccount'])->name('interactions.account.close');
     Route::get('interactions/manual', [InteractionController::class, 'createManual'])->name('interactions.manual');
     Route::post('interactions/manual', [InteractionController::class, 'storeManual'])->name('interactions.storeManual');
     Route::get('interactions/{interaction}', [InteractionController::class, 'show'])->name('interactions.show');
@@ -115,6 +129,9 @@ Route::middleware('auth')->group(function () {
         ->name('interactions.override');
     Route::post('interactions/{interaction}/resolve-contact', [InteractionController::class, 'resolveContact'])
         ->name('interactions.resolveContact');
+    Route::post('interactions/{interaction}/follow-up', [InteractionController::class, 'followUp'])->name('interactions.followUp');
+    Route::post('interactions/{interaction}/close', [InteractionController::class, 'close'])->name('interactions.close');
+    Route::post('interactions/{interaction}/reopen', [InteractionController::class, 'reopen'])->name('interactions.reopen');
 
     /*
     | Database kontak (UID) dan register agent. Data pribadi — setiap aksi
@@ -262,6 +279,20 @@ Route::middleware('auth')->group(function () {
     /*
     | Task Management — modul terpisah dari Ticketing.
     */
+    /*
+    | Buku Tamu / Antrian — sisi petugas.
+    */
+    Route::get('antrian', [GuestBookController::class, 'index'])->name('guest-book.admin.index');
+    Route::get('antrian/rows', [GuestBookController::class, 'rows'])->name('guest-book.admin.rows');
+    Route::post('antrian/{entry}/status', [GuestBookController::class, 'status'])->name('guest-book.admin.status');
+    Route::post('antrian/{entry}/ticket', [GuestBookController::class, 'ticket'])->name('guest-book.admin.ticket');
+    Route::get('antrian/{entry}/paraf', [GuestBookController::class, 'signature'])->name('guest-book.admin.signature');
+
+    // Jadwal kegiatan (`is_public` tasks, rendered through a whitelist — see
+    // PublicTaskController). It used to be reachable without logging in; it
+    // now needs a session like the rest of Task Management.
+    Route::get('jadwal-kegiatan', [PublicTaskController::class, 'index'])->name('public.tasks');
+
     Route::get('tasks', [TaskController::class, 'index'])->name('tasks.index');
     Route::post('tasks', [TaskController::class, 'store'])->name('tasks.store');
     Route::get('tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');

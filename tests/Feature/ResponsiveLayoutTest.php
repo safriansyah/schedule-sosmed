@@ -120,8 +120,8 @@ it('keeps the viewport meta tag that makes any of this work', function () {
         ->assertSee('name="viewport"', false)
         ->assertSee('width=device-width', false);
 
-    // The public page is a separate document and needs it just as much.
-    $this->get(route('public.tasks'))
+    // The jadwal kegiatan page is a separate document and needs it just as much.
+    $this->actingAs(\App\Models\User::withRole(\App\Enums\RoleName::Operator)->firstOrFail())->get(route('public.tasks'))
         ->assertOk()
         ->assertSee('width=device-width', false);
 });

@@ -33,10 +33,14 @@
                             <div>
                                 <label for="source" class="label">Sumber <span class="text-rose-500">*</span></label>
                                 <select id="source" name="source" class="input" required>
-                                    @foreach ($sources as $value => $label)
+                                    @foreach ($sources as $sourceGroup => $groupItems)
+                                        <optgroup label="{{ $sourceGroup }}">
+                                        @foreach ($groupItems as $value => $label)
                                         <option value="{{ $value }}" @selected(old('source', $student ? 'import_mahasiswa' : 'manual') === $value)>
                                             {{ $label }}
                                         </option>
+                                        @endforeach
+                                        </optgroup>
                                     @endforeach
                                 </select>
                                 @error('source') <p class="form-error">{{ $message }}</p> @enderror
@@ -174,15 +178,7 @@
                         <label for="assigned_to" class="label">Operator / Agent</label>
                         <select id="assigned_to" name="assigned_to" class="input">
                             <option value="">— Belum ditugaskan —</option>
-                            @foreach ($operators->groupBy(fn ($u) => $u->role?->label ?? 'Lainnya') as $roleLabel => $group)
-                                <optgroup label="{{ $roleLabel }}">
-                                    @foreach ($group as $operator)
-                                        <option value="{{ $operator->id }}" @selected(old('assigned_to') == $operator->id)>
-                                            {{ $operator->name }}
-                                        </option>
-                                    @endforeach
-                                </optgroup>
-                            @endforeach
+                            <x-operator-options :operators="$operators" :selected="old('assigned_to')"/>
                         </select>
 
                         <p class="mt-2 text-[11px] text-slate-400">

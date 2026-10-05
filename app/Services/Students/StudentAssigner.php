@@ -3,7 +3,10 @@
 namespace App\Services\Students;
 
 use App\Enums\AssignmentStatus;
+use App\Enums\TicketStatus;
 use App\Models\Student;
+use App\Models\Ticket;
+use App\Models\TicketAssignment;
 use App\Models\User;
 use App\Services\ActivityLogger;
 use App\Services\Students\StudentStats;
@@ -183,12 +186,59 @@ class StudentAssigner
      */
     private function apply(array $ids, User $operator, User $actor): int
     {
-        return Student::whereIn('id', $ids)->update([
+        $count = Student::whereIn('id', $ids)->update([
             'assignment_status' => AssignmentStatus::Assigned->value,
             'assigned_to' => $operator->id,
             'assigned_by' => $actor->id,
             'assigned_at' => now(),
         ]);
+
+        $this->handOverTickets($ids, $operator, $actor);
+
+        return $count;
+    }
+
+    /**
+     * The student's open tickets go with them: whoever is given a student is
+     * the one following up their tickets, exactly as if each ticket had been
+     * assigned from its own page. Each hand-over is written to the ticket's
+     * assignment history, so the change is traceable there too.
+     *
+     * @param  array<int, int>  $studentIds
+     */
+    private function handOverTickets(array $studentIds, User $operator, User $actor): void
+    {
+        foreach (array_chunk($studentIds, 1000) as $chunk) {
+            $tickets = Ticket::query()
+                ->open()
+                ->whereIn('student_id', $chunk)
+                ->where(fn ($q) => $q->whereNull('assigned_to')->orWhere('assigned_to', '!=', $operator->id))
+                ->get(['id', 'assigned_to', 'status']);
+
+            if ($tickets->isEmpty()) {
+                continue;
+            }
+
+            $now = now();
+            $ids = $tickets->pluck('id')->all();
+
+            Ticket::whereIn('id', $ids)->update(['assigned_to' => $operator->id, 'assigned_at' => $now]);
+
+            // Open → Assigned, the same step TicketService::assign() takes.
+            Ticket::whereIn('id', $ids)
+                ->where('status', TicketStatus::Open->value)
+                ->update(['status' => TicketStatus::Assigned->value]);
+
+            TicketAssignment::insert($tickets->map(fn (Ticket $t) => [
+                'ticket_id' => $t->id,
+                'from_user_id' => $t->assigned_to,
+                'to_user_id' => $operator->id,
+                'assigned_by' => $actor->id,
+                'note' => 'Ikut penugasan mahasiswa',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all());
+        }
     }
 
     private function logHandout(int $count, User $operator, User $actor, string $how): void

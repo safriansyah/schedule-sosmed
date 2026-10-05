@@ -68,6 +68,9 @@ enum Permission: string
     case CloseTickets = 'ticket.close';
     case ManageTicketCategories = 'ticket.category';
 
+    // Buku Tamu / Antrian (sisi petugas; formulir & monitornya publik)
+    case ManageGuestBook = 'guestbook.manage';
+
     // Task management
     case ViewTasks = 'task.view';
     case ManageTasks = 'task.manage';
@@ -127,6 +130,7 @@ enum Permission: string
             self::AssignTickets => 'Tugaskan tiket ke operator',
             self::CloseTickets => 'Tutup tiket',
             self::ManageTicketCategories => 'Kelola kategori tiket',
+            self::ManageGuestBook => 'Kelola buku tamu & antrian',
             self::ViewTasks => 'Lihat task management',
             self::ManageTasks => 'Kelola task',
             self::PublishTasks => 'Publikasikan task ke halaman publik',

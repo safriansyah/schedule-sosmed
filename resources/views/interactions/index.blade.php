@@ -65,7 +65,7 @@
                 $active = $tab === $key;
                 $count  = $counts[$key] ?? 0;
             @endphp
-            <a href="{{ route('interactions.index', ['tab' => $key]) }}"
+            <a href="{{ route('interactions.index', array_filter(['tab' => $key, 'view' => $view === 'account' ? 'account' : null])) }}"
                title="{{ $description }}"
                @class([
                    'inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition',
@@ -94,6 +94,7 @@
     {{-- Filters --}}
     <form method="GET" class="card mb-6 flex flex-col gap-3 p-4 lg:flex-row lg:items-end">
         <input type="hidden" name="tab" value="{{ $tab }}">
+        @if ($view === 'account') <input type="hidden" name="view" value="account"> @endif
 
         <div class="flex-1">
             <label for="q" class="label">Cari isi komentar / nama</label>
@@ -154,8 +155,8 @@
 
         <div class="flex gap-2">
             <button class="btn-primary"><x-icon name="filter" class="h-4 w-4"/> Terapkan</button>
-            @if (array_filter(\Illuminate\Support\Arr::except($filters, 'tab')))
-                <a href="{{ route('interactions.index', ['tab' => $tab]) }}" class="btn-outline" title="Reset filter">
+            @if (array_filter(\Illuminate\Support\Arr::except($filters, ['tab', 'view'])))
+                <a href="{{ route('interactions.index', array_filter(['tab' => $tab, 'view' => $view === 'account' ? 'account' : null])) }}" class="btn-outline" title="Reset filter">
                     <x-icon name="x" class="h-4 w-4"/>
                 </a>
             @endif
@@ -163,6 +164,24 @@
     </form>
 
     @php $canHandle = auth()->user()->can(\App\Enums\Permission::HandleInteractions->value); @endphp
+
+    {{-- Per komentar / Per akun. Same tab and filters either way. --}}
+    <div class="mb-3 inline-flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-white/5">
+        @foreach (['list' => ['Per komentar', 'message'], 'account' => ['Per akun', 'users']] as $key => [$label, $icon])
+            <a href="{{ route('interactions.index', array_filter(['view' => $key === 'account' ? 'account' : null] + \Illuminate\Support\Arr::except($filters, 'view'))) }}"
+               @class([
+                   'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+                   'bg-white text-brand-700 shadow-sm dark:bg-ink-850 dark:text-brand-300' => $view === $key,
+                   'text-slate-500 hover:text-slate-700 dark:text-slate-400' => $view !== $key,
+               ])>
+                <x-icon :name="$icon" class="h-3.5 w-3.5"/> {{ $label }}
+            </a>
+        @endforeach
+    </div>
+
+    @if ($view === 'account')
+        @include('interactions.partials.accounts')
+    @else
 
     {{-- List. Wrapped in the bulk form so the checkboxes submit as ids[] with
          no JavaScript involved — Alpine only drives the select-all box and
@@ -212,6 +231,11 @@
 
                 <button name="action" value="done" class="btn-success !py-2">
                     <x-icon name="check-circle" class="h-4 w-4"/> Selesai
+                </button>
+
+                <button name="action" value="close" class="btn-outline !py-2"
+                        title="Penanganan selesai. Riwayat tetap tersimpan; follow up baru membukanya lagi.">
+                    <x-icon name="check" class="h-4 w-4"/> Close
                 </button>
 
                 <button name="action" value="ignore" class="btn-outline !py-2"
@@ -286,5 +310,6 @@
 
     @if ($interactions->hasPages())
         <div class="mt-6">{{ $interactions->links() }}</div>
+    @endif
     @endif
 </x-layouts.app>

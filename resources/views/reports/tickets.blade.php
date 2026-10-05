@@ -31,8 +31,12 @@
                 <label for="source" class="label">Sumber</label>
                 <select id="source" name="source" class="input" onchange="this.form.submit()">
                     <option value="">Semua sumber</option>
-                    @foreach ($sources as $value => $label)
+                    @foreach ($sources as $sourceGroup => $groupItems)
+                        <optgroup label="{{ $sourceGroup }}">
+                        @foreach ($groupItems as $value => $label)
                         <option value="{{ $value }}" @selected(($filters['source'] ?? '') === $value)>{{ $label }}</option>
+                        @endforeach
+                        </optgroup>
                     @endforeach
                 </select>
             </div>
@@ -133,12 +137,16 @@
                 <x-empty-state icon="file-text" title="Belum ada tiket" description="Belum ada tiket pada filter ini."/>
             @else
                 <div class="divide-y divide-slate-100 dark:divide-white/5">
-                    @foreach ($sources as $value => $label)
+                    @foreach ($sources as $sourceGroup => $groupItems)
+                        <optgroup label="{{ $sourceGroup }}">
+                        @foreach ($groupItems as $value => $label)
                         @continue(! $bySource->has($value))
                         <div class="flex items-center justify-between px-4 py-2.5 text-sm">
                             <span class="text-slate-600 dark:text-slate-300">{{ $label }}</span>
                             <span class="font-bold text-slate-700 dark:text-slate-200">{{ number_format($bySource[$value]) }}</span>
                         </div>
+                        @endforeach
+                        </optgroup>
                     @endforeach
                 </div>
             @endif
