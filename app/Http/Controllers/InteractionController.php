@@ -516,7 +516,6 @@ class InteractionController extends Controller
             ->selectRaw('MAX(author_avatar) AS author_avatar')
             ->selectRaw('MAX(author_avatar_path) AS author_avatar_path')
             ->groupBy('channel', 'author_handle')
-            ->orderByDesc('any_urgent')
             ->orderByDesc('last_at')
             ->paginate(25)
             ->withQueryString();
@@ -547,10 +546,11 @@ class InteractionController extends Controller
             ->when($request->input('sentiment'), fn ($q, $v) => $q->where(fn ($sub) => $sub
                 ->where('sentiment_override', $v)
                 ->orWhere(fn ($inner) => $inner->whereNull('sentiment_override')->where('sentiment', $v))))
-            ->orderByDesc('is_urgent')
+            // Terbaru dulu. Yang mendesak tetap punya tab sendiri dan
+            // penanda merah di setiap baris.
             ->orderByDesc('occurred_at')
             // Pembeda terakhir — lihat ContactController::index().
-            ->orderBy('id');
+            ->orderByDesc('id');
     }
 
     /**

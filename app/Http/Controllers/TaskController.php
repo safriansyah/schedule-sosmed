@@ -67,6 +67,7 @@ class TaskController extends Controller
                 ->filtered($filters)
                 ->with(['pic:id,name', 'ticket:id,number'])
                 ->orderByDesc('start_date')
+                ->orderByDesc('id')
                 ->paginate(15)
                 ->withQueryString(),
             'stats' => $this->stats(),

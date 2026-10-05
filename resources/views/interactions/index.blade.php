@@ -204,7 +204,7 @@
                 @endif
                 {{ number_format($interactions->total()) }} interaksi
             </h2>
-            <span class="text-xs text-slate-400">Diurutkan: mendesak dulu, lalu terbaru</span>
+            <span class="text-xs text-slate-400">Diurutkan: terbaru dulu</span>
         </div>
 
         {{-- Action bar. Sticks to the bottom so it stays reachable while

@@ -41,13 +41,13 @@ class ContactController extends Controller
             ->when($request->input('has_phone') === '1', fn ($q) => $q->whereNotNull('phone_e164'))
             ->with(['identities', 'region', 'owner:id,name'])
             ->withCount('interactions')
-            ->orderByDesc('potential_score')
-            ->orderByDesc('last_seen_at')
+            // Terbaru dulu, seperti semua daftar di aplikasi.
+            ->latest()
             // Pembeda terakhir. Tanpa kunci unik di akhir urutan, dua baris
-            // berskor sama boleh muncul dalam urutan berbeda tiap query — dan
-            // saat dipaginasi, satu baris bisa terlewat sama sekali tanpa
-            // gejala apa pun.
-            ->orderBy('id')
+            // dengan waktu yang sama boleh muncul dalam urutan berbeda tiap
+            // query — dan saat dipaginasi, satu baris bisa terlewat sama
+            // sekali tanpa gejala apa pun.
+            ->orderByDesc('id')
             ->paginate(24)
             ->withQueryString();
 

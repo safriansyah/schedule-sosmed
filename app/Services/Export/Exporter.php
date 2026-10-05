@@ -130,8 +130,11 @@ class Exporter
      * entire export in memory, which is the one thing this class exists to
      * avoid.
      *
-     * Keyset (`id > last`), not OFFSET: an operator editing rows while a long
+     * Keyset (`id < last`), not OFFSET: an operator editing rows while a long
      * export runs shifts OFFSET pages underneath it, and rows get skipped.
+     *
+     * Newest first (highest id first), matching every list on screen — the
+     * file opens with the same rows the page showed at the top.
      *
      * @return Generator<int, array<int, mixed>>
      */
@@ -139,13 +142,13 @@ class Exporter
     {
         $model = $query->getModel();
         $key = $model->getQualifiedKeyName();
-        $lastId = 0;
+        $lastId = null;
 
         while (true) {
             $page = (clone $query)
                 ->reorder()
-                ->where($key, '>', $lastId)
-                ->orderBy($key)
+                ->when($lastId !== null, fn (Builder $q) => $q->where($key, '<', $lastId))
+                ->orderByDesc($key)
                 ->limit($chunk)
                 ->get();
 

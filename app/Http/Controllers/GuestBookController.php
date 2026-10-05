@@ -346,7 +346,8 @@ class GuestBookController extends Controller
             };
         }
 
-        return $query->orderByDesc('queue_date')->orderBy('queue_number');
+        // Terbaru dulu: tanggal terbaru, dan dalam satu hari nomor terakhir di atas.
+        return $query->orderByDesc('queue_date')->orderByDesc('queue_number');
     }
 
     /**

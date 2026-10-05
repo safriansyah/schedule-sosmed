@@ -171,3 +171,19 @@ it('shows error pages in Indonesian, with the theme switch, without the build', 
         ->toContain('id="theme-toggle"')
         ->not->toContain('/build/assets/');
 });
+
+it('lists the newest records first', function () {
+    $admin = \App\Models\User::withRole(\App\Enums\RoleName::SuperAdmin)->firstOrFail();
+
+    // Two users created a moment apart: the later one must come first.
+    $older = new \App\Models\User;
+    $older->forceFill(['name' => 'AAA Urutan Lama', 'email' => 'urut-lama-'.uniqid().'@example.test', 'password' => 'Rahasia-123', 'role_id' => $admin->role_id, 'is_active' => true])->save();
+    $this->travel(1)->minutes();
+    $newer = new \App\Models\User;
+    $newer->forceFill(['name' => 'ZZZ Urutan Baru', 'email' => 'urut-baru-'.uniqid().'@example.test', 'password' => 'Rahasia-123', 'role_id' => $admin->role_id, 'is_active' => true])->save();
+
+    $html = $this->actingAs($admin)->get(route('users.index', ['q' => 'Urutan']))->assertOk()->getContent();
+
+    // By name, AAA would come first; newest-first puts ZZZ on top.
+    expect(strpos($html, 'ZZZ Urutan Baru'))->toBeLessThan(strpos($html, 'AAA Urutan Lama'));
+});

@@ -24,7 +24,7 @@ class SocialAccountController extends Controller
     {
         $this->authorize(Permission::ViewAccounts->value);
 
-        $accounts = SocialAccount::withCount('schedules')->orderBy('name')->get();
+        $accounts = SocialAccount::withCount('schedules')->latest()->get();
 
         // Yesterday's snapshot per account — used to show follower growth.
         $previous = AccountMetric::whereIn('social_account_id', $accounts->pluck('id'))

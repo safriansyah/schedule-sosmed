@@ -4,7 +4,7 @@
     <h2 class="text-base font-bold text-slate-800 dark:text-white">
         {{ number_format($accounts->total()) }} akun
     </h2>
-    <span class="text-xs text-slate-400">Akun dengan komentar mendesak di atas, lalu interaksi terbaru</span>
+    <span class="text-xs text-slate-400">Diurutkan: interaksi terbaru dulu</span>
 </div>
 
 <div class="space-y-3">

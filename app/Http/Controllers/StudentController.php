@@ -104,7 +104,7 @@ class StudentController extends Controller
             // So each row can say whether a ticket already exists for it —
             // otherwise "Generate Ticket" is a number with no detail behind it.
             ->withCount('tickets')
-            ->orderBy('id')
+            ->orderByDesc('id')
             ->paginate($this->perPage($request, 50))
             ->withQueryString();
 

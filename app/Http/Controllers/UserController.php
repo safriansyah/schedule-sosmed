@@ -26,7 +26,8 @@ class UserController extends Controller
                 $query->where(fn ($q) => $q->where('name', 'like', $like)->orWhere('email', 'like', $like));
             })
             ->when($request->input('role'), fn ($q, $id) => $q->where('role_id', $id))
-            ->orderBy('name')
+            ->latest()
+            ->orderByDesc('id')
             ->paginate(15)
             ->withQueryString();
 

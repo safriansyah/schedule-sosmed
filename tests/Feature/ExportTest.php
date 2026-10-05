@@ -84,7 +84,9 @@ it('exports students as a readable xlsx', function () {
 
     expect($rows[0])->toContain('NIM')
         ->and($rows)->toHaveCount(4)   // header + 3
-        ->and($rows[1][0])->toBe('EXP0000001');
+        // Newest first, like the list on screen.
+        ->and($rows[1][0])->toBe('EXP0000003')
+        ->and($rows[3][0])->toBe('EXP0000001');
 });
 
 it('never exports another operator’s students', function () {
