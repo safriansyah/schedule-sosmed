@@ -46,6 +46,8 @@ class GuestBookController extends Controller
             'processes' => GuestBookCompletion::processes(),
             'resolutions' => GuestBookCompletion::resolutions(),
             'operators' => User::ticketHandlerOptions(),
+            // "Operator yang menyelesaikan": the front desk too, not only ticket handlers.
+            'completers' => User::ticketHandlerOptions(User::GUEST_BOOK_COMPLETER_ROLES),
             'canAssign' => $request->user()->hasPermission(Permission::AssignTickets),
             'canTicket' => $request->user()->hasPermission(Permission::CreateTickets),
         ]);
@@ -167,7 +169,7 @@ class GuestBookController extends Controller
         $data = $request->validate([
             'service_process' => ['required', Rule::in(array_keys(GuestBookCompletion::processes()))],
             'resolution' => ['required', Rule::in(array_keys(GuestBookCompletion::resolutions()))],
-            'completed_by' => ['required', 'integer', User::ticketHandlerRule()],
+            'completed_by' => ['required', 'integer', User::ticketHandlerRule(User::GUEST_BOOK_COMPLETER_ROLES)],
             'completion_note' => ['nullable', 'string', 'max:1000'],
         ], [], [
             'service_process' => 'proses layanan',

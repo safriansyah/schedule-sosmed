@@ -16,6 +16,9 @@ enum RoleName: string
     case Operator = 'operator';
     case FollowUp = 'follow_up';
 
+    /* Front desk — the walk-in queue (Buku Tamu / Antrian). */
+    case Frontdesk = 'frontdesk';
+
     /**
      * The name plus what the role is FOR, in brackets.
      *
@@ -36,6 +39,7 @@ enum RoleName: string
             self::Pic => 'PIC (Penanganan)',
             self::Operator => 'Operator (Penanganan & Data)',
             self::FollowUp => 'Operator Follow Up (Tiket)',
+            self::Frontdesk => 'Operator Frontdesk (Buku Tamu)',
         };
     }
 
@@ -52,7 +56,7 @@ enum RoleName: string
     {
         return match ($this) {
             self::Creative, self::Curator, self::Verifier => 'Konten',
-            self::Manager, self::Pic, self::Operator, self::FollowUp => 'Penanganan',
+            self::Manager, self::Pic, self::Operator, self::FollowUp, self::Frontdesk => 'Penanganan',
             default => 'Umum',
         };
     }
@@ -68,8 +72,9 @@ enum RoleName: string
             self::Manager => 'Membagi tugas, memantau SLA, dan mengeskalasi interaksi mendesak.',
             self::Pic => 'Menangani dan membalas interaksi pada kanal yang menjadi tanggung jawabnya.',
             self::Operator => 'Menangani interaksi, melengkapi data kontak, dan mengangkat agent baru.',
-            self::FollowUp => 'Hanya menindaklanjuti tiket yang ditugaskan kepadanya. '
-                .'Tidak bisa membuat, membagikan, menutup, atau melihat tiket orang lain.',
+            self::FollowUp => 'Menindaklanjuti dan menutup tiket yang ditugaskan kepadanya, serta melihat data mahasiswanya. '
+                .'Tidak bisa membuat, membagikan, atau melihat tiket orang lain.',
+            self::Frontdesk => 'Mengelola Buku Tamu / Antrian: memanggil, melayani, menyelesaikan, dan meneruskan tamu menjadi tiket.',
         };
     }
 
@@ -85,6 +90,7 @@ enum RoleName: string
             self::Pic => 'headset',
             self::Operator => 'user-plus',
             self::FollowUp => 'phone',
+            self::Frontdesk => 'id-card',
         };
     }
 
@@ -203,7 +209,6 @@ enum RoleName: string
                 Permission::CreateTickets,
                 Permission::HandleTickets,
                 Permission::EditTickets,
-                Permission::ManageGuestBook,
                 // Whoever works a ticket finishes it. Closing demands a
                 // resolution note and is the natural end of the follow-up the
                 // handler is already doing, so withholding it left a PIC able
@@ -250,6 +255,26 @@ enum RoleName: string
                 Permission::ViewStudents,
             ],
 
+            /*
+             | The front desk: runs the walk-in queue (Buku Tamu / Antrian) —
+             | call, serve, finish, skip — and hands a visitor on as a ticket
+             | when the case needs follow-up. Together with the Manager, the
+             | only role that manages the queue.
+             |
+             |   CreateTickets + AssignTickets -> "Add Ticket" with "Tugaskan ke"
+             |   ViewTickets (no ViewAllTickets) -> only the tickets they raised,
+             |                         so the link after Add Ticket opens
+             |
+             | No HandleTickets: the follow-up itself is the operator's job.
+             */
+            self::Frontdesk => [
+                Permission::ViewDashboard,
+                Permission::ManageGuestBook,
+                Permission::ViewTickets,
+                Permission::CreateTickets,
+                Permission::AssignTickets,
+            ],
+
             // Operator is the only non-admin role that may enrich a contact
             // record and press "Jadikan Agent".
             self::Operator => [
@@ -271,7 +296,6 @@ enum RoleName: string
                 Permission::CreateTickets,
                 Permission::HandleTickets,
                 Permission::EditTickets,
-                Permission::ManageGuestBook,
                 Permission::CloseTickets,
                 Permission::ViewTasks,
                 Permission::ExportData,

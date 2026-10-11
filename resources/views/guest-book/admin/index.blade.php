@@ -19,7 +19,8 @@
 
     @php
         $me = auth()->user();
-        $meIsOperator = $operators->contains('id', $me->id);
+        // Pre-select the person at the desk in "Operator yang menyelesaikan".
+        $meIsOperator = $completers->contains('id', $me->id);
     @endphp
 
     <div x-data="guestQueue({
@@ -147,7 +148,7 @@
                         <label for="gb-operator" class="label">Operator yang menyelesaikan <span class="text-rose-500">*</span></label>
                         <select id="gb-operator" class="input" x-model="form.completed_by" required>
                             <option value="">Pilih operator…</option>
-                            <x-operator-options :operators="$operators"/>
+                            <x-operator-options :operators="$completers"/>
                         </select>
                         <p class="form-error" x-show="errors.completed_by" x-text="errors.completed_by"></p>
                     </div>

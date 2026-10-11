@@ -25,6 +25,22 @@ abstract class TestCase extends BaseTestCase
 
         if (isset($uses[DatabaseTransactions::class])) {
             DB::table('users')->update(['is_active' => true, 'login_schedule_enabled' => false]);
+
+            // A role nobody holds yet in the real database (a new one, say)
+            // still gets a user to test with — again only inside the
+            // transaction, so no account is ever left behind.
+            foreach (\App\Models\Role::all() as $role) {
+                if (! \App\Models\User::where('role_id', $role->id)->exists()) {
+                    $user = new \App\Models\User;
+                    $user->forceFill([
+                        'name' => 'Uji '.$role->label,
+                        'email' => 'uji-'.$role->name->value.'@example.test',
+                        'password' => 'Rahasia-Uji-123',
+                        'role_id' => $role->id,
+                        'is_active' => true,
+                    ])->save();
+                }
+            }
         }
 
         return $uses;

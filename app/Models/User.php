@@ -239,40 +239,68 @@ class User extends Authenticatable
         RoleName::FollowUp, RoleName::Operator, RoleName::Pic, RoleName::Manager, RoleName::SuperAdmin,
     ];
 
+    /**
+     * Who can be named as having finished a walk-in visit ("Operator yang
+     * menyelesaikan" on the Buku Tamu): the front desk first — they serve
+     * most visitors — then everyone a ticket may go to.
+     */
+    public const GUEST_BOOK_COMPLETER_ROLES = [
+        RoleName::Frontdesk, ...self::TICKET_HANDLER_ROLES,
+    ];
+
     /** Active accounts in one of TICKET_HANDLER_ROLES. */
     public function scopeTicketHandlers(Builder $query): Builder
     {
-        $roles = array_map(fn (RoleName $r) => $r->value, self::TICKET_HANDLER_ROLES);
-
-        return $query->active()->whereHas('role', fn ($q) => $q->whereIn('name', $roles));
+        return $query->inRoles(self::TICKET_HANDLER_ROLES);
     }
 
     /**
-     * The operator picker's options: grouped by role (in TICKET_HANDLER_ROLES
-     * order), then by name.
+     * Active accounts in one of the given roles.
      *
+     * @param  array<int, RoleName>  $roles
+     */
+    public function scopeInRoles(Builder $query, array $roles): Builder
+    {
+        $names = array_map(fn (RoleName $r) => $r->value, $roles);
+
+        return $query->active()->whereHas('role', fn ($q) => $q->whereIn('name', $names));
+    }
+
+    /**
+     * The operator picker's options: grouped by role (in the given order,
+     * TICKET_HANDLER_ROLES by default), then by name.
+     *
+     * @param  array<int, RoleName>|null  $roles
      * @return \Illuminate\Support\Collection<int, self>
      */
-    public static function ticketHandlerOptions()
+    public static function ticketHandlerOptions(?array $roles = null)
     {
-        $roles = array_map(fn (RoleName $r) => $r->value, self::TICKET_HANDLER_ROLES);
+        $roles ??= self::TICKET_HANDLER_ROLES;
+        $order = array_map(fn (RoleName $r) => $r->value, $roles);
 
         return static::query()
-            ->ticketHandlers()
+            ->inRoles($roles)
             ->with('role:id,name,label')
             ->orderBy('name')
             ->get(['id', 'name', 'role_id'])
-            ->sortBy(fn (self $u) => array_search($u->role?->name?->value, $roles, true))
+            ->sortBy(fn (self $u) => array_search($u->role?->name?->value, $order, true))
             ->values();
     }
 
-    /** Validation rule: the id must be someone ticketHandlers() would list. */
-    public static function ticketHandlerRule(): \Illuminate\Validation\Rules\Exists
+    /**
+     * Validation rule: the id must be someone the matching picker would list
+     * (TICKET_HANDLER_ROLES by default).
+     *
+     * @param  array<int, RoleName>|null  $roles
+     */
+    public static function ticketHandlerRule(?array $roles = null): \Illuminate\Validation\Rules\Exists
     {
-        return \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($q) {
+        $names = array_map(fn (RoleName $r) => $r->value, $roles ?? self::TICKET_HANDLER_ROLES);
+
+        return \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($q) use ($names) {
             $q->where('is_active', true)
                 ->whereNull('deleted_at')
-                ->whereIn('role_id', Role::whereIn('name', array_map(fn (RoleName $r) => $r->value, self::TICKET_HANDLER_ROLES))->select('id'));
+                ->whereIn('role_id', Role::whereIn('name', $names)->select('id'));
         });
     }
 

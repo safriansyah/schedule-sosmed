@@ -255,6 +255,9 @@ class TicketController extends Controller
     public function assign(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->authorize(Permission::AssignTickets->value);
+        // Like every other ticket action: only a ticket this user may see.
+        // (Manager sees all; Operator Frontdesk only the ones they raised.)
+        $this->guardVisibility($request->user(), $ticket);
 
         $data = $request->validate([
             'assigned_to' => ['nullable', 'integer', User::ticketHandlerRule()],

@@ -21,6 +21,7 @@ class RolePermissionSeeder extends Seeder
         'creative' => 30,
         'operator' => 25,
         'follow_up' => 20,
+        'frontdesk' => 20,
     ];
 
     public function run(): void

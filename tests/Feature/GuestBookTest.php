@@ -116,14 +116,14 @@ it('keeps the operator side behind a login and the permission', function () {
     $this->actingAs(User::withRole(RoleName::Creative)->firstOrFail())
         ->get(route('guest-book.admin.index'))->assertForbidden();
 
-    $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())
+    $this->actingAs(User::withRole(RoleName::Frontdesk)->firstOrFail())
         ->get(route('guest-book.admin.index'))->assertOk();
 });
 
 it('moves an entry through the queue, and the monitor follows', function () {
     $this->post(route('guest-book.store'), guestForm());
     $entry = GuestBookEntry::latest('id')->first();
-    $operator = User::withRole(RoleName::Operator)->firstOrFail();
+    $operator = User::withRole(RoleName::Frontdesk)->firstOrFail();
 
     $this->actingAs($operator)->postJson(route('guest-book.admin.status', $entry), ['status' => 'called'])->assertOk();
 
@@ -149,7 +149,7 @@ it('moves an entry through the queue, and the monitor follows', function () {
 it('turns an entry into exactly one ticket with source Buku Tamu', function () {
     $this->post(route('guest-book.store'), guestForm());
     $entry = GuestBookEntry::latest('id')->first();
-    $operator = User::withRole(RoleName::Operator)->firstOrFail();
+    $operator = User::withRole(RoleName::Frontdesk)->firstOrFail();
 
     $first = $this->actingAs($operator)->postJson(route('guest-book.admin.ticket', $entry))->assertOk()->json();
     $second = $this->actingAs($operator)->postJson(route('guest-book.admin.ticket', $entry))->assertOk()->json();
@@ -190,7 +190,7 @@ it('hands the new ticket to an operator when one is chosen', function () {
 });
 
 it('never offers Buku Tamu as a source for a hand-made ticket', function () {
-    $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())
+    $this->actingAs(User::withRole(RoleName::Frontdesk)->firstOrFail())
         ->post(route('tickets.store'), [
             'subject' => 'Coba sumber buku tamu',
             'source' => TicketSource::GuestBook->value,
@@ -274,7 +274,7 @@ it('records how a visit was finished and by which operator', function () {
 it('searches by name, phone or number within a date range', function () {
     $this->post(route('guest-book.store'), guestForm(['name' => 'Cari Saya Nanti', 'whatsapp' => '0811 2233 4455']));
     $entry = GuestBookEntry::latest('id')->first();
-    $operator = User::withRole(RoleName::Operator)->firstOrFail();
+    $operator = User::withRole(RoleName::Frontdesk)->firstOrFail();
     $today = now('Asia/Jakarta')->toDateString();
 
     foreach (['Cari Saya', '0811-2233-4455', $entry->displayNumber()] as $q) {
@@ -294,9 +294,69 @@ it('searches by name, phone or number within a date range', function () {
 it('downloads the filtered list as xlsx', function () {
     $this->post(route('guest-book.store'), guestForm(['name' => 'Ekspor Tamu']));
 
-    $response = $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())
+    $response = $this->actingAs(User::withRole(RoleName::Frontdesk)->firstOrFail())
         ->get(route('guest-book.admin.export', ['q' => 'Ekspor Tamu', 'filter' => 'all', 'format' => 'xlsx']));
 
     $response->assertOk();
     expect($response->headers->get('content-disposition'))->toContain('buku-tamu-')->toContain('.xlsx');
+});
+
+/* -----------------------------------------------------------------
+ | Who runs the queue: Manager and Operator Frontdesk
+ * ----------------------------------------------------------------- */
+
+it('lets only the Manager and the Operator Frontdesk run the queue', function () {
+    foreach ([RoleName::Manager, RoleName::Frontdesk] as $role) {
+        $this->actingAs(User::withRole($role)->firstOrFail())
+            ->get(route('guest-book.admin.index'))->assertOk();
+    }
+
+    foreach ([RoleName::Operator, RoleName::Pic, RoleName::FollowUp, RoleName::Director] as $role) {
+        $this->actingAs(User::withRole($role)->firstOrFail())
+            ->get(route('guest-book.admin.index'))->assertForbidden();
+    }
+});
+
+it('lets the front desk hand a visitor on as a ticket, assigned, and open it afterwards', function () {
+    $this->post(route('guest-book.store'), guestForm());
+    $entry = GuestBookEntry::latest('id')->first();
+    $frontdesk = User::withRole(RoleName::Frontdesk)->firstOrFail();
+    $followUp = User::withRole(RoleName::FollowUp)->firstOrFail();
+
+    $json = $this->actingAs($frontdesk)
+        ->postJson(route('guest-book.admin.ticket', $entry), ['assigned_to' => $followUp->id])
+        ->assertOk()->json();
+
+    $ticket = Ticket::where('number', $json['ticket'])->firstOrFail();
+
+    expect($ticket->assigned_to)->toBe($followUp->id)
+        ->and($ticket->created_by)->toBe($frontdesk->id);
+
+    // Their own ticket opens; the follow-up itself is not theirs to do.
+    $this->actingAs($frontdesk)->get(route('tickets.show', $ticket))->assertOk();
+    $this->actingAs($frontdesk)->post(route('tickets.followUp', $ticket), ['action' => 'ditelepon', 'response_text' => 'x'])
+        ->assertForbidden();
+});
+
+it('keeps the front desk away from tickets it did not raise', function () {
+    $frontdesk = User::withRole(RoleName::Frontdesk)->firstOrFail();
+    $manager = User::withRole(RoleName::Manager)->firstOrFail();
+    $followUp = User::withRole(RoleName::FollowUp)->firstOrFail();
+
+    $theirs = Ticket::createWithNumber([
+        'subject' => 'Tiket orang lain', 'source' => TicketSource::Manual, 'created_by' => $manager->id,
+    ]);
+
+    $this->actingAs($frontdesk)->get(route('tickets.show', $theirs))->assertForbidden();
+
+    // Assigning is its permission, but not on a ticket it may not see.
+    $this->actingAs($frontdesk)->post(route('tickets.assign', $theirs), ['assigned_to' => $followUp->id])
+        ->assertForbidden();
+
+    expect($theirs->fresh()->assigned_to)->toBeNull();
+
+    // And nothing outside the front desk's job.
+    foreach (['/students', '/interactions', '/contents', '/reports', '/users'] as $uri) {
+        $this->actingAs($frontdesk)->get($uri)->assertForbidden();
+    }
 });
