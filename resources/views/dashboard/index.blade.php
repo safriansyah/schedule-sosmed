@@ -8,6 +8,7 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            @if ($seesContent)
             {{-- Period filter --}}
             <form method="GET" class="flex items-center gap-2">
                 <select name="period" class="input !w-auto !py-2" onchange="this.form.submit()">
@@ -16,6 +17,7 @@
                     @endforeach
                 </select>
             </form>
+            @endif
 
             @can(App\Enums\Permission::ViewMonitoring->value)
                 <x-sync-button :last-synced-at="$lastSyncedAt"/>
@@ -35,6 +37,25 @@
         @include('dashboard.partials.health')
     @endif
 
+    {{-- Buku Tamu hari ini — for whoever runs the queue (Manager, Frontdesk). --}}
+    @if ($guestBook)
+        <div class="mb-6">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-base font-bold text-slate-800 dark:text-white">Antrian Hari Ini</h2>
+                <a href="{{ route('guest-book.admin.index') }}" class="text-xs font-medium text-brand-600 transition hover:text-brand-500">
+                    Buka antrian →
+                </a>
+            </div>
+            <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                <x-stat-card label="Menunggu" :value="number_format($guestBook['waiting'])" icon="clock" tone="amber" :href="route('guest-book.admin.index')"/>
+                <x-stat-card label="Dipanggil / dilayani" :value="number_format($guestBook['serving'])" icon="headset" tone="cyan" :href="route('guest-book.admin.index')"/>
+                <x-stat-card label="Selesai" :value="number_format($guestBook['done'])" icon="check-circle" tone="emerald" :href="route('guest-book.admin.index', ['filter' => 'finished'])"/>
+                <x-stat-card label="Jadi tiket" :value="number_format($guestBook['ticketed'])" icon="file-text" tone="violet" :href="route('guest-book.admin.index', ['filter' => 'finished'])"/>
+            </div>
+        </div>
+    @endif
+
+    @if ($seesContent)
     {{-- Workflow counters, each compared to the previous window --}}
     <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         @foreach ($workflow as $key => $card)
@@ -88,6 +109,8 @@
         @endif
     </div>
 
+    @endif
+
     {{-- Interaksi & sentimen — only for roles that work the inbox. Placed
          above account performance because it is about people waiting for a
          reply, not about numbers that can be read tomorrow. --}}
@@ -140,6 +163,7 @@
         </div>
     @endif
 
+    @if ($seesContent)
     {{-- Team output + upcoming --}}
     <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
 
@@ -198,6 +222,8 @@
             @endforelse
         </div>
     </div>
+
+    @endif
 
     {{-- Personal / activity --}}
     <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">

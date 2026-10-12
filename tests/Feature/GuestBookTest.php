@@ -360,3 +360,31 @@ it('keeps the front desk away from tickets it did not raise', function () {
         $this->actingAs($frontdesk)->get($uri)->assertForbidden();
     }
 });
+
+it('gives the front desk a dashboard about the queue, not about content or other people', function () {
+    $frontdesk = User::withRole(RoleName::Frontdesk)->firstOrFail();
+    $manager = User::withRole(RoleName::Manager)->firstOrFail();
+
+    // Someone else's activity must not show up on the front desk's dashboard.
+    \App\Models\Activity::create(['user_id' => $manager->id, 'action' => 'user.updated', 'description' => 'Aktivitas rahasia orang lain']);
+
+    $html = $this->actingAs($frontdesk)->get(route('dashboard'))->assertOk()->getContent();
+
+    expect($html)
+        ->toContain('Antrian Hari Ini')
+        ->not->toContain('Produksi Konten')
+        ->not->toContain('Produktivitas Tim')
+        ->not->toContain('Aktivitas rahasia orang lain');
+
+    // Operator Follow Up: same — no content numbers, no one else's activity.
+    $this->actingAs(User::withRole(RoleName::FollowUp)->firstOrFail())->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee('Produksi Konten')
+        ->assertDontSee('Aktivitas rahasia orang lain');
+
+    // Content roles keep their numbers; the Director (Aktivitas) sees everyone.
+    $this->actingAs(User::withRole(RoleName::Creative)->firstOrFail())->get(route('dashboard'))
+        ->assertOk()->assertSee('Produksi Konten');
+    $this->actingAs(User::withRole(RoleName::Director)->firstOrFail())->get(route('dashboard'))
+        ->assertOk()->assertSee('Aktivitas rahasia orang lain');
+});

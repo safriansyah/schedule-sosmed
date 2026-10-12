@@ -33,6 +33,11 @@ class DashboardController extends Controller
 
         [$from, $to, $label] = $this->dashboard->window($period);
 
+        // Content production numbers are for roles that work with content.
+        // An Operator Follow Up or the front desk has no access to content,
+        // so they neither see these nor pay for computing them.
+        $seesContent = $user->can(Permission::ViewAnyContent->value);
+
         return view('dashboard.index', [
             'period' => $period,
             'periods' => DashboardService::PERIODS,
@@ -40,12 +45,21 @@ class DashboardController extends Controller
             'from' => $from,
             'to' => $to,
 
-            'workflow' => $this->dashboard->workflow($from, $to),
-            'trend' => $this->dashboard->contentTrend($from, $to),
-            'breakdown' => $this->dashboard->statusBreakdown(),
-            'team' => $this->dashboard->teamOutput($from, $to),
-            'accounts' => $this->dashboard->accountPerformance($period),
-            'upcoming' => $this->dashboard->upcoming(),
+            'seesContent' => $seesContent,
+            'workflow' => $seesContent ? $this->dashboard->workflow($from, $to) : [],
+            'trend' => $seesContent ? $this->dashboard->contentTrend($from, $to) : [],
+            'breakdown' => $seesContent ? $this->dashboard->statusBreakdown() : collect(),
+            'team' => $seesContent ? $this->dashboard->teamOutput($from, $to) : collect(),
+            'accounts' => $seesContent ? $this->dashboard->accountPerformance($period) : collect(),
+            'upcoming' => $seesContent ? $this->dashboard->upcoming() : collect(),
+
+            // Today's queue, for whoever runs the Buku Tamu.
+            'guestBook' => $user->can(Permission::ManageGuestBook->value) ? [
+                'waiting' => \App\Models\GuestBookEntry::today()->where('status', \App\Enums\GuestBookStatus::Waiting->value)->count(),
+                'serving' => \App\Models\GuestBookEntry::today()->whereIn('status', [\App\Enums\GuestBookStatus::Called->value, \App\Enums\GuestBookStatus::Serving->value])->count(),
+                'done' => \App\Models\GuestBookEntry::today()->where('status', \App\Enums\GuestBookStatus::Done->value)->count(),
+                'ticketed' => \App\Models\GuestBookEntry::today()->where('status', \App\Enums\GuestBookStatus::Ticketed->value)->count(),
+            ] : null,
 
             // Only shown to roles that can act on it — a creative cannot fix
             // a stopped cron, and an alarm nobody can answer is just noise.
@@ -85,7 +99,13 @@ class DashboardController extends Controller
                 : null,
 
             'myWork' => $user->isCreative() ? $this->contents->needsAttentionFor($user) : collect(),
-            'recentActivity' => Activity::with('user:id,name')->latest()->limit(8)->get(),
+            // Everyone's activity is what the Aktivitas permission is for;
+            // without it, a user sees their own actions only.
+            'recentActivity' => Activity::with('user:id,name')
+                ->when(! $user->can(Permission::ViewActivity->value), fn ($q) => $q->where('user_id', $user->id))
+                ->latest()
+                ->limit(8)
+                ->get(),
             'lastSyncedAt' => SyncController::lastSyncedAt(),
         ]);
     }
