@@ -212,7 +212,9 @@ class GuestBookController extends Controller
      * and the masa registrasi the operator types in, then one row per visit
      * in the order they came — with the visitor's drawn paraf as a picture.
      *
-     * Same search, dates, type and tab as the list on screen.
+     * Same search and type as the list on screen; the dates and the status
+     * come from the download modal (Selesai by default — the ledger is a
+     * record of visits that were served). Newest first, like every list.
      */
     public function export(Request $request)
     {
@@ -220,6 +222,7 @@ class GuestBookController extends Controller
 
         $data = $request->validate([
             'masa_registrasi' => ['required', 'string', 'regex:/^\d{4}\.\d{1,2}$/'],
+            'status' => ['nullable', Rule::in(array_keys(self::LEDGER_STATUSES))],
         ], [
             'masa_registrasi.required' => 'Isi masa registrasi, contoh 2026.1.',
             'masa_registrasi.regex' => 'Format masa registrasi: tahun titik angka, contoh 2026.1.',
@@ -228,16 +231,17 @@ class GuestBookController extends Controller
         [$from, $to] = $this->range($request);
 
         $this->log->log('guest_book.exported', "Export buku besar layanan {$from->toDateString()} s/d {$to->toDateString()} (masa {$data['masa_registrasi']})", null, [
-            'filters' => array_filter($request->only('q', 'type', 'filter')),
+            'filters' => array_filter($request->only('q', 'type', 'status')),
             'masa_registrasi' => $data['masa_registrasi'],
         ]);
 
-        $rows = (function () use ($request) {
+        $status = $data['status'] ?? 'done';
+
+        $rows = (function () use ($request, $status) {
             $number = 0;
-            $query = $this->filteredQuery($request)
+            $query = $this->filteredQuery($request, withTab: false)
                 ->with(['completer:id,name', 'handler:id,name', 'ticket:id,number'])
-                // A ledger reads top to bottom in the order visitors came.
-                ->reorder()->orderBy('queue_date')->orderBy('queue_number');
+                ->when($status !== 'all', fn (Builder $q) => $q->whereIn('status', self::LEDGER_STATUSES[$status][1]));
 
             foreach ($query->lazy(500) as $e) {
                 /** @var GuestBookEntry $e */
@@ -287,6 +291,14 @@ class GuestBookController extends Controller
     public const LEDGER_CODE = 'JJ03-RK06-RII.2';
 
     public const LEDGER_CODE_DATE = '9 Agustus 2017';
+
+    /** Status choices on the download modal: key => [label, statuses]. */
+    public const LEDGER_STATUSES = [
+        'done' => ['Selesai', ['done']],
+        'finished' => ['Selesai & dijadikan tiket', ['done', 'ticketed']],
+        'ticketed' => ['Dijadikan tiket', ['ticketed']],
+        'all' => ['Semua status', []],
+    ];
 
     /** More than a day's queue on one screen stops being useful; export instead. */
     private const LIST_LIMIT = 300;

@@ -208,6 +208,25 @@
                         <p class="form-error" x-show="errors.masa_registrasi" x-text="errors.masa_registrasi"></p>
                     </div>
 
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="gb-ex-from" class="label">Dari tanggal</label>
+                            <input id="gb-ex-from" type="date" class="input" x-model="form.from" required>
+                        </div>
+                        <div>
+                            <label for="gb-ex-to" class="label">Sampai tanggal</label>
+                            <input id="gb-ex-to" type="date" class="input" x-model="form.to" required>
+                        </div>
+                        <div class="col-span-2">
+                            <label for="gb-ex-status" class="label">Status</label>
+                            <select id="gb-ex-status" class="input" x-model="form.status">
+                                @foreach (\App\Http\Controllers\GuestBookController::LEDGER_STATUSES as $key => [$label])
+                                    <option value="{{ $key }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
                     <dl class="grid grid-cols-1 gap-2 rounded-xl bg-slate-50 p-3 text-xs sm:grid-cols-3 dark:bg-white/5">
                         <div>
                             <dt class="text-slate-400">Unit</dt>
@@ -223,7 +242,7 @@
                         </div>
                     </dl>
                     <p class="text-xs text-slate-400">
-                        Unit, kode, dan tanggal kode terisi otomatis. Isi berkas mengikuti pencarian, tanggal, jenis, dan tab yang sedang tampil — lengkap dengan paraf tamu.
+                        Unit, kode, dan tanggal kode terisi otomatis. Isi berkas mengikuti tanggal dan status di atas (plus pencarian dan jenis yang sedang aktif), urut dari yang terbaru, lengkap dengan paraf tamu.
                     </p>
 
                     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -314,26 +333,34 @@
                         return new URLSearchParams(Object.fromEntries(Object.entries(this.query).filter(([, v]) => v !== '' && v !== null)));
                     },
 
-                    exportHref(masa) {
-                        return config.exportUrl + '?' + this.params() + '&format=xlsx&masa_registrasi=' + encodeURIComponent(masa);
+                    exportHref() {
+                        const params = new URLSearchParams({ format: 'xlsx', ...this.form });
+                        if (this.query.q) params.set('q', this.query.q);
+                        if (this.query.type) params.set('type', this.query.type);
+                        return config.exportUrl + '?' + params;
                     },
 
                     // The last masa typed is offered again; it changes once a semester.
                     openExport() {
                         let masa = '';
                         try { masa = localStorage.getItem('guestBook.masaRegistrasi') || ''; } catch (e) {}
-                        this.open('export', null, { masa_registrasi: masa });
+                        // Dates start from the list's; the ledger is of served visits.
+                        this.open('export', null, { masa_registrasi: masa, from: this.query.from, to: this.query.to, status: 'done' });
                         this.$nextTick(() => this.$refs.masa?.focus());
                     },
 
                     submitExport() {
-                        const masa = (this.form.masa_registrasi || '').trim();
+                        const masa = this.form.masa_registrasi = (this.form.masa_registrasi || '').trim();
                         if (!/^\d{4}\.\d{1,2}$/.test(masa)) {
                             this.errors = { masa_registrasi: 'Format masa registrasi: tahun titik angka, contoh 2026.1.' };
                             return;
                         }
                         try { localStorage.setItem('guestBook.masaRegistrasi', masa); } catch (e) {}
-                        window.location.href = this.exportHref(masa);
+                        if (!this.form.from || !this.form.to) {
+                            this.errors = { masa_registrasi: 'Pilih rentang tanggal terlebih dahulu.' };
+                            return;
+                        }
+                        window.location.href = this.exportHref();
                         this.modal = null;
                     },
 

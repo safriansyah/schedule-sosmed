@@ -302,7 +302,7 @@ it('downloads the buku besar layanan as xlsx, with the form header and every par
         ->assertSessionHasErrors('masa_registrasi');
 
     $response = $this->actingAs($frontdesk)
-        ->get(route('guest-book.admin.export', ['q' => 'Ekspor Tamu', 'filter' => 'all', 'format' => 'xlsx', 'masa_registrasi' => '2026.1']));
+        ->get(route('guest-book.admin.export', ['q' => 'Ekspor Tamu', 'status' => 'all', 'format' => 'xlsx', 'masa_registrasi' => '2026.1']));
 
     $response->assertOk();
     expect($response->headers->get('content-disposition'))->toContain('buku-tamu-')->toContain('masa-2026.1.xlsx');
@@ -321,11 +321,25 @@ it('downloads the buku besar layanan as xlsx, with the form header and every par
         ->toContain('Ekspor Tamu / 012345678')
         ->toContain('<drawing r:id="rId1"/>');
 
+    // Newest first: the second visitor is on the first data row.
+    expect(strpos($sheet, 'Ekspor Tamu Dua'))->toBeLessThan(strpos($sheet, 'Ekspor Tamu / '));
+
     // Both visitors' paraf are in the file as pictures.
     expect($zip->getFromName('xl/media/paraf1.png'))->toStartWith("\x89PNG")
         ->and($zip->getFromName('xl/media/paraf2.png'))->toStartWith("\x89PNG")
         ->and(substr_count($zip->getFromName('xl/drawings/drawing1.xml'), '<xdr:pic>'))->toBe(2);
 
+    $zip->close();
+
+    // Status Selesai (the default): only the visit that was finished.
+    GuestBookEntry::where('name', 'Ekspor Tamu')->update(['status' => GuestBookStatus::Done->value, 'finished_at' => now()]);
+
+    $done = $this->actingAs($frontdesk)
+        ->get(route('guest-book.admin.export', ['q' => 'Ekspor Tamu', 'masa_registrasi' => '2026.1']));
+
+    $zip = new ZipArchive;
+    $zip->open($done->getFile()->getPathname());
+    expect($zip->getFromName('xl/worksheets/sheet1.xml'))->toContain('Ekspor Tamu / ')->not->toContain('Ekspor Tamu Dua');
     $zip->close();
 });
 
