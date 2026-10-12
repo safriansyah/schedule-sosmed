@@ -63,9 +63,9 @@
                     </select>
                 </div>
                 <div class="col-span-2 sm:col-span-1 lg:col-span-2">
-                    <a :href="exportHref()" class="btn-outline w-full">
+                    <button type="button" @click="openExport()" class="btn-outline w-full">
                         <x-icon name="download" class="h-4 w-4"/> Download XLSX
-                    </a>
+                    </button>
                 </div>
             </div>
 
@@ -106,7 +106,7 @@
                 <div class="mb-4 flex items-start justify-between gap-4">
                     <div>
                         <p class="text-base font-bold text-slate-800 dark:text-white"
-                           x-text="{ complete: 'Selesaikan Antrian', detail: 'Detail Antrian', ticket: 'Jadikan Tiket' }[modal]"></p>
+                           x-text="{ complete: 'Selesaikan Antrian', detail: 'Detail Antrian', ticket: 'Jadikan Tiket', export: 'Download Buku Besar Layanan' }[modal]"></p>
                         <p class="text-xs text-slate-400" x-show="entry">
                             No. <span class="font-mono font-bold" x-text="entry?.number"></span> ·
                             <span x-text="entry?.name"></span>
@@ -199,6 +199,41 @@
                     </div>
                 </div>
 
+                {{-- Download buku besar --}}
+                <form x-show="modal === 'export'" @submit.prevent="submitExport()" class="space-y-4" data-no-submit-guard>
+                    <div>
+                        <label for="gb-masa" class="label">Masa registrasi <span class="text-rose-500">*</span></label>
+                        <input id="gb-masa" type="text" inputmode="decimal" class="input" x-model.trim="form.masa_registrasi"
+                               placeholder="Contoh 2026.1" pattern="\d{4}\.\d{1,2}" maxlength="7" required x-ref="masa">
+                        <p class="form-error" x-show="errors.masa_registrasi" x-text="errors.masa_registrasi"></p>
+                    </div>
+
+                    <dl class="grid grid-cols-1 gap-2 rounded-xl bg-slate-50 p-3 text-xs sm:grid-cols-3 dark:bg-white/5">
+                        <div>
+                            <dt class="text-slate-400">Unit</dt>
+                            <dd class="font-semibold text-slate-700 dark:text-slate-200">{{ \App\Http\Controllers\GuestBookController::LEDGER_UNIT }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-400">Kode formulir</dt>
+                            <dd class="font-mono font-semibold text-slate-700 dark:text-slate-200">{{ \App\Http\Controllers\GuestBookController::LEDGER_CODE }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-400">Tanggal kode</dt>
+                            <dd class="font-semibold text-slate-700 dark:text-slate-200">{{ \App\Http\Controllers\GuestBookController::LEDGER_CODE_DATE }}</dd>
+                        </div>
+                    </dl>
+                    <p class="text-xs text-slate-400">
+                        Unit, kode, dan tanggal kode terisi otomatis. Isi berkas mengikuti pencarian, tanggal, jenis, dan tab yang sedang tampil — lengkap dengan paraf tamu.
+                    </p>
+
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <button type="button" class="btn-outline" @click="closeModal()">Batal</button>
+                        <button class="btn-primary">
+                            <x-icon name="download" class="h-4 w-4"/> Download XLSX
+                        </button>
+                    </div>
+                </form>
+
                 {{-- Add Ticket --}}
                 <form x-show="modal === 'ticket'" @submit.prevent="submitTicket()" class="space-y-4" data-no-submit-guard>
                     <p class="text-sm text-slate-600 dark:text-slate-300">
@@ -279,8 +314,27 @@
                         return new URLSearchParams(Object.fromEntries(Object.entries(this.query).filter(([, v]) => v !== '' && v !== null)));
                     },
 
-                    exportHref() {
-                        return config.exportUrl + '?' + this.params() + '&format=xlsx';
+                    exportHref(masa) {
+                        return config.exportUrl + '?' + this.params() + '&format=xlsx&masa_registrasi=' + encodeURIComponent(masa);
+                    },
+
+                    // The last masa typed is offered again; it changes once a semester.
+                    openExport() {
+                        let masa = '';
+                        try { masa = localStorage.getItem('guestBook.masaRegistrasi') || ''; } catch (e) {}
+                        this.open('export', null, { masa_registrasi: masa });
+                        this.$nextTick(() => this.$refs.masa?.focus());
+                    },
+
+                    submitExport() {
+                        const masa = (this.form.masa_registrasi || '').trim();
+                        if (!/^\d{4}\.\d{1,2}$/.test(masa)) {
+                            this.errors = { masa_registrasi: 'Format masa registrasi: tahun titik angka, contoh 2026.1.' };
+                            return;
+                        }
+                        try { localStorage.setItem('guestBook.masaRegistrasi', masa); } catch (e) {}
+                        window.location.href = this.exportHref(masa);
+                        this.modal = null;
                     },
 
                     async refresh() {

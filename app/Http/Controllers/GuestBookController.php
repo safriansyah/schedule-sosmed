@@ -9,9 +9,8 @@ use App\Enums\Permission;
 use App\Models\GuestBookEntry;
 use App\Models\User;
 use App\Services\ActivityLogger;
-use App\Services\Export\Exporter;
 use App\Services\Tickets\TicketService;
-use App\Support\PhoneNumber;
+use App\Support\Spreadsheet\ServiceLedgerWriter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -208,66 +207,86 @@ class GuestBookController extends Controller
         ]);
     }
 
-    /** Download what the list shows — same search, dates, type and tab. */
-    public function export(Request $request, Exporter $exporter)
+    /**
+     * The printed "Buku Besar Daftar Layanan" form, filled: unit, form code
+     * and the masa registrasi the operator types in, then one row per visit
+     * in the order they came — with the visitor's drawn paraf as a picture.
+     *
+     * Same search, dates, type and tab as the list on screen.
+     */
+    public function export(Request $request)
     {
         $this->authorize(Permission::ManageGuestBook->value);
 
-        [$from, $to] = $this->range($request);
-
-        $this->log->log('guest_book.exported', "Export buku tamu {$from->toDateString()} s/d {$to->toDateString()}", null, [
-            'filters' => array_filter($request->only('q', 'type', 'filter')),
+        $data = $request->validate([
+            'masa_registrasi' => ['required', 'string', 'regex:/^\d{4}\.\d{1,2}$/'],
+        ], [
+            'masa_registrasi.required' => 'Isi masa registrasi, contoh 2026.1.',
+            'masa_registrasi.regex' => 'Format masa registrasi: tahun titik angka, contoh 2026.1.',
         ]);
 
-        return $exporter->download(
-            format: (string) $request->input('format', 'xlsx'),
-            // The exporter stamps the download date onto the name itself.
-            filename: $from->equalTo($to) ? 'buku-tamu' : 'buku-tamu-'.$from->format('Ymd').'-sd-'.$to->format('Ymd'),
-            columns: [
-                'date' => 'Tanggal',
-                'number' => 'No. Antrian',
-                'name' => 'Nama',
-                'nim' => 'NIM',
-                'gender' => 'Jenis Kelamin',
-                'whatsapp' => 'No. WhatsApp',
-                'phone' => 'No. HP',
-                'type' => 'Jenis Kunjungan',
-                'service' => 'Layanan / Keluhan',
-                'description' => 'Deskripsi',
-                'status' => 'Status',
-                'registered' => 'Jam Daftar',
-                'called' => 'Jam Dipanggil',
-                'finished' => 'Selesai',
-                'process' => 'Proses Layanan',
-                'resolution' => 'Penyelesaian',
-                'completed_by' => 'Operator yang Menyelesaikan',
-                'note' => 'Catatan',
-                'ticket' => 'Tiket',
-            ],
-            query: $this->filteredQuery($request)->with(['completer:id,name', 'ticket:id,number']),
-            mapper: fn (GuestBookEntry $e) => [
-                $e->queue_date->format('Y-m-d'),
-                $e->displayNumber(),
-                $e->name,
-                $e->nim,
-                $e->gender->label(),
-                PhoneNumber::pretty($e->whatsapp) ?? $e->whatsapp,
-                PhoneNumber::pretty($e->phone) ?? $e->phone,
-                $e->service->typeLabel(),
-                $e->service->label(),
-                $e->description,
-                $e->status->label(),
-                $e->created_at->timezone('Asia/Jakarta')->format('H:i'),
-                $e->called_at?->timezone('Asia/Jakarta')->format('H:i'),
-                $e->finished_at?->timezone('Asia/Jakarta')->format('Y-m-d H:i'),
-                GuestBookCompletion::processLabel($e->service_process),
-                GuestBookCompletion::resolutionLabel($e->resolution),
-                $e->completer?->name,
-                $e->completion_note,
-                $e->ticket?->number,
-            ],
-        );
+        [$from, $to] = $this->range($request);
+
+        $this->log->log('guest_book.exported', "Export buku besar layanan {$from->toDateString()} s/d {$to->toDateString()} (masa {$data['masa_registrasi']})", null, [
+            'filters' => array_filter($request->only('q', 'type', 'filter')),
+            'masa_registrasi' => $data['masa_registrasi'],
+        ]);
+
+        $rows = (function () use ($request) {
+            $number = 0;
+            $query = $this->filteredQuery($request)
+                ->with(['completer:id,name', 'handler:id,name', 'ticket:id,number'])
+                // A ledger reads top to bottom in the order visitors came.
+                ->reorder()->orderBy('queue_date')->orderBy('queue_number');
+
+            foreach ($query->lazy(500) as $e) {
+                /** @var GuestBookEntry $e */
+                $resolution = GuestBookCompletion::resolutionLabel($e->resolution)
+                    ?? ($e->ticket ? 'Dijadikan tiket '.$e->ticket->number : null);
+
+                yield [
+                    'cells' => [
+                        ++$number,
+                        $e->queue_date->format('d/m/Y'),
+                        $e->name.($e->nim ? ' / '.$e->nim : ''),
+                        $e->service->label(),
+                        GuestBookCompletion::processLabel($e->service_process) ?? '-',
+                        $resolution ?? '-',
+                        $e->finished_at?->timezone('Asia/Jakarta')->format('d/m/Y') ?? '-',
+                        $e->name,
+                        null, // the paraf picture
+                        $e->completer?->name ?? $e->handler?->name ?? '-',
+                    ],
+                    'signature' => $e->signature_path && Storage::disk('local')->exists($e->signature_path)
+                        ? Storage::disk('local')->path($e->signature_path)
+                        : null,
+                ];
+            }
+        })();
+
+        $temp = tempnam(sys_get_temp_dir(), 'ledger_');
+        @unlink($temp);
+        $path = (new ServiceLedgerWriter)->write($temp.'.xlsx', [
+            'unit' => self::LEDGER_UNIT,
+            'period' => $data['masa_registrasi'],
+            'code' => self::LEDGER_CODE,
+            'code_date' => self::LEDGER_CODE_DATE,
+        ], $rows);
+
+        $name = 'buku-tamu-'.($from->equalTo($to) ? $from->format('Ymd') : $from->format('Ymd').'-sd-'.$to->format('Ymd'))
+            .'-masa-'.$data['masa_registrasi'].'.xlsx';
+
+        return response()
+            ->download($path, $name, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
+            ->deleteFileAfterSend();
     }
+
+    /** Fixed parts of the printed form, filled in automatically. */
+    public const LEDGER_UNIT = 'Pangkalpinang';
+
+    public const LEDGER_CODE = 'JJ03-RK06-RII.2';
+
+    public const LEDGER_CODE_DATE = '9 Agustus 2017';
 
     /** More than a day's queue on one screen stops being useful; export instead. */
     private const LIST_LIMIT = 300;

@@ -291,14 +291,42 @@ it('searches by name, phone or number within a date range', function () {
         ->assertDontSee('Cari Saya Nanti');
 });
 
-it('downloads the filtered list as xlsx', function () {
+it('downloads the buku besar layanan as xlsx, with the form header and every paraf', function () {
     $this->post(route('guest-book.store'), guestForm(['name' => 'Ekspor Tamu']));
+    $this->post(route('guest-book.store'), guestForm(['name' => 'Ekspor Tamu Dua']));
+    $frontdesk = User::withRole(RoleName::Frontdesk)->firstOrFail();
 
-    $response = $this->actingAs(User::withRole(RoleName::Frontdesk)->firstOrFail())
-        ->get(route('guest-book.admin.export', ['q' => 'Ekspor Tamu', 'filter' => 'all', 'format' => 'xlsx']));
+    // Without a masa registrasi there is nothing to put on the form.
+    $this->actingAs($frontdesk)
+        ->get(route('guest-book.admin.export', ['q' => 'Ekspor Tamu', 'filter' => 'all']))
+        ->assertSessionHasErrors('masa_registrasi');
+
+    $response = $this->actingAs($frontdesk)
+        ->get(route('guest-book.admin.export', ['q' => 'Ekspor Tamu', 'filter' => 'all', 'format' => 'xlsx', 'masa_registrasi' => '2026.1']));
 
     $response->assertOk();
-    expect($response->headers->get('content-disposition'))->toContain('buku-tamu-')->toContain('.xlsx');
+    expect($response->headers->get('content-disposition'))->toContain('buku-tamu-')->toContain('masa-2026.1.xlsx');
+
+    $zip = new ZipArchive;
+    $zip->open($response->getFile()->getPathname());
+    $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+
+    expect($sheet)
+        ->toContain('BUKU BESAR DAFTAR LAYANAN')
+        ->toContain('Pangkalpinang')
+        ->toContain('2026.1')
+        ->toContain('JJ03-RK06-RII.2')
+        ->toContain('9 Agustus 2017')
+        ->toContain('Paraf Mahasiswa atau yang Mewakili')
+        ->toContain('Ekspor Tamu / 012345678')
+        ->toContain('<drawing r:id="rId1"/>');
+
+    // Both visitors' paraf are in the file as pictures.
+    expect($zip->getFromName('xl/media/paraf1.png'))->toStartWith("\x89PNG")
+        ->and($zip->getFromName('xl/media/paraf2.png'))->toStartWith("\x89PNG")
+        ->and(substr_count($zip->getFromName('xl/drawings/drawing1.xml'), '<xdr:pic>'))->toBe(2);
+
+    $zip->close();
 });
 
 /* -----------------------------------------------------------------
