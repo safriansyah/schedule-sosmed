@@ -7,11 +7,19 @@
             </p>
         </div>
 
-        @can(\App\Enums\Permission::ImportLeads->value)
-            <a href="{{ route('leads.import.index') }}" class="btn-primary">
-                <x-icon name="upload" class="h-4 w-4"/> Import Data Lead
-            </a>
-        @endcan
+        <div class="flex flex-wrap gap-2">
+            @can(\App\Enums\Permission::ExportData->value)
+                {{-- Same filters as the list below: what you see is what you get. --}}
+                <a href="{{ route('leads.export', array_filter($filters)) }}" class="btn-outline">
+                    <x-icon name="download" class="h-4 w-4"/> Download XLSX
+                </a>
+            @endcan
+            @can(\App\Enums\Permission::ImportLeads->value)
+                <a href="{{ route('leads.import.index') }}" class="btn-primary">
+                    <x-icon name="upload" class="h-4 w-4"/> Import Data Lead
+                </a>
+            @endcan
+        </div>
     </x-slot:header>
 
     @php

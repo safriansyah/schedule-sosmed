@@ -183,3 +183,34 @@ it('lets the Manager import, the Director only look, and keeps others out', func
         $this->actingAs($user)->get(route('leads.import.index'))->assertForbidden();
     }
 });
+
+it('downloads the filtered lead list as xlsx, newest first', function () {
+    importLeads($this, leadCsv("Nama,No HP,Kota,Asal Sekolah\nLead Uji Unduh Lama,081290000051,Bangka,SMA 1\n"), LeadSource::Mitra);
+    importLeads($this, leadCsv("Nama,No HP,Kota\nLead Uji Unduh Baru,081290000052,Bangka\n"), LeadSource::Mitra);
+    importLeads($this, leadCsv("Nama,No HP,Kota\nLead Uji Unduh Lain,081290000053,Bangka\n"), LeadSource::TiktokAds);
+
+    $this->actingAs($this->manager)->get(route('leads.index'))->assertSee(route('leads.export'));
+
+    $response = $this->actingAs($this->manager)
+        ->get(route('leads.export', ['sumber' => 'mitra', 'q' => 'Lead Uji Unduh']))
+        ->assertOk();
+
+    expect($response->headers->get('content-disposition'))->toContain('data-lead-mitra-')->toContain('.xlsx');
+
+    $zip = new ZipArchive;
+    $zip->open($response->getFile()->getPathname());
+    $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+    $zip->close();
+
+    expect($sheet)
+        ->toContain('Sumber Data')
+        ->toContain('Mitra')
+        ->toContain('<t xml:space="preserve">081290000051</t>')   // text, leading 0 kept
+        ->not->toContain('Lead Uji Unduh Lain')                  // other source
+        ->and(strpos($sheet, 'Lead Uji Unduh Baru'))->toBeLessThan(strpos($sheet, 'Lead Uji Unduh Lama'));
+
+    // Viewing is not exporting: the Director sees the list, not the button.
+    $director = User::withRole(RoleName::Director)->firstOrFail();
+    $this->actingAs($director)->get(route('leads.index'))->assertOk()->assertDontSee(route('leads.export'));
+    $this->actingAs($director)->get(route('leads.export'))->assertForbidden();
+});

@@ -208,6 +208,7 @@ Route::middleware('auth')->group(function () {
     | Data Lead — calon mahasiswa dari iklan, sosprom, mitra dan UT Pusat.
     */
     Route::get('leads', [LeadController::class, 'index'])->name('leads.index');
+    Route::get('leads/export', [LeadController::class, 'export'])->name('leads.export');
     Route::get('leads/import', [LeadImportController::class, 'index'])->name('leads.import.index');
     Route::post('leads/import', [LeadImportController::class, 'store'])->name('leads.import.store');
     Route::get('leads/import/template', [LeadImportController::class, 'template'])->name('leads.import.template');
