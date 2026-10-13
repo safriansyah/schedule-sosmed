@@ -86,6 +86,13 @@
                 ],
             ],
             [
+                'label' => 'Data Lead', 'icon' => 'target', 'active' => 'leads.*',
+                'children' => [
+                    ['route' => 'leads.index', 'label' => 'Daftar Lead', 'active' => 'leads.index', 'can' => Permission::ViewLeads],
+                    ['route' => 'leads.import.index', 'label' => 'Import Data Lead', 'active' => 'leads.import.*', 'can' => Permission::ImportLeads],
+                ],
+            ],
+            [
                 'label' => 'Task Management', 'icon' => 'calendar', 'active' => 'tasks.*|reports.tasks',
                 'children' => [
                     ['route' => 'tasks.index', 'label' => 'Papan Rencana', 'active' => 'tasks.index|tasks.show', 'can' => Permission::ViewTasks],

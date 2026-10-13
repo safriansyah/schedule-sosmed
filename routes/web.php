@@ -25,6 +25,8 @@ use App\Http\Controllers\SocialAccountController;
 use App\Http\Controllers\StudentAssignmentController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\StudentImportController;
+use App\Http\Controllers\LeadController;
+use App\Http\Controllers\LeadImportController;
 use App\Http\Controllers\StudentTicketController;
 use App\Http\Controllers\TaskCheckController;
 use App\Http\Controllers\TaskController;
@@ -201,6 +203,18 @@ Route::middleware('auth')->group(function () {
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.readAll');
     Route::post('notifications/{id}', [NotificationController::class, 'read'])->name('notifications.read');
+
+    /*
+    | Data Lead — calon mahasiswa dari iklan, sosprom, mitra dan UT Pusat.
+    */
+    Route::get('leads', [LeadController::class, 'index'])->name('leads.index');
+    Route::get('leads/import', [LeadImportController::class, 'index'])->name('leads.import.index');
+    Route::post('leads/import', [LeadImportController::class, 'store'])->name('leads.import.store');
+    Route::get('leads/import/template', [LeadImportController::class, 'template'])->name('leads.import.template');
+    Route::get('leads/import/{import}/preview', [LeadImportController::class, 'preview'])->name('leads.import.preview');
+    Route::post('leads/import/{import}/confirm', [LeadImportController::class, 'confirm'])->name('leads.import.confirm');
+    Route::get('leads/import/{import}/errors', [LeadImportController::class, 'errors'])->name('leads.import.errors');
+    Route::get('leads/import/{import}', [LeadImportController::class, 'show'])->name('leads.import.show');
 
     /*
     | Data Mahasiswa — daftar, import, dan pembagian ke operator.

@@ -58,6 +58,10 @@ enum Permission: string
     case ImportStudents = 'student.import';
     case AssignStudents = 'student.assign';       // bagikan ke operator
 
+    // Data Lead (calon mahasiswa dari iklan, sosprom, mitra, UT Pusat)
+    case ViewLeads = 'lead.view';
+    case ImportLeads = 'lead.import';
+
     // Ticketing
     case ViewTickets = 'ticket.view';
     case ViewAllTickets = 'ticket.viewAll';       // lihat tiket operator lain
@@ -122,6 +126,8 @@ enum Permission: string
             self::ManageStudents => 'Kelola & lengkapi data mahasiswa',
             self::ImportStudents => 'Import data mahasiswa',
             self::AssignStudents => 'Bagikan mahasiswa ke operator',
+            self::ViewLeads => 'Lihat data lead',
+            self::ImportLeads => 'Import data lead',
             self::ViewTickets => 'Lihat tiket',
             self::ViewAllTickets => 'Lihat tiket seluruh operator',
             self::CreateTickets => 'Buat tiket',
