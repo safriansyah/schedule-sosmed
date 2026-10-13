@@ -85,7 +85,7 @@
                             </a>
                         @endif
 
-                        @if ($ticket->interaction_id)
+                        @if ($ticket->interaction_id && auth()->user()->can(\App\Enums\Permission::ViewInteractions->value))
                             <a href="{{ route('interactions.show', $ticket->interaction_id) }}" class="btn-outline btn-sm">
                                 <x-icon name="inbox" class="h-3.5 w-3.5"/> Buka Interaksi
                             </a>
@@ -292,10 +292,12 @@
                             </div>
 
                             <div class="flex shrink-0 items-center gap-2">
-                                @if ($detail->student_id)
+                                @if ($detail->student_id && auth()->user()->can(\App\Enums\Permission::ViewStudents->value))
                                     <a href="{{ route('students.show', $detail->student_id) }}" class="badge-green">
                                         <x-icon name="link" class="h-3 w-3"/> Tertaut data import
                                     </a>
+                                @elseif ($detail->student_id)
+                                    <span class="badge-green"><x-icon name="link" class="h-3 w-3"/> Tertaut data import</span>
                                 @else
                                     <span class="badge-amber" title="NIM ini belum ada di data mahasiswa hasil import">
                                         Belum ada di import
@@ -383,11 +385,11 @@
                                 <span x-text="open ? 'Tutup Detail Mahasiswa' : 'Detail Mahasiswa'">Detail Mahasiswa</span>
                             </button>
 
-                            @if ($s)
+                            @if ($s && auth()->user()->can(\App\Enums\Permission::ViewStudents->value))
                                 <a href="{{ route('students.show', $s) }}" class="btn-sm text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400">
                                     Buka halaman mahasiswa
                                 </a>
-                            @else
+                            @elseif (! $s)
                                 <span class="text-[11px] text-slate-400">
                                     NIM ini belum ada di data import, jadi tidak ada detail yang bisa ditarik.
                                 </span>
@@ -870,10 +872,14 @@
                         <div class="flex items-center justify-between gap-3">
                             <dt class="text-slate-400">Mahasiswa</dt>
                             <dd>
-                                <a href="{{ route('students.show', $ticket->student) }}"
-                                   class="font-medium text-brand-600 hover:underline dark:text-brand-400">
-                                    {{ $ticket->student->nim }}
-                                </a>
+                                @can(\App\Enums\Permission::ViewStudents->value)
+                                    <a href="{{ route('students.show', $ticket->student) }}"
+                                       class="font-medium text-brand-600 hover:underline dark:text-brand-400">
+                                        {{ $ticket->student->nim }}
+                                    </a>
+                                @else
+                                    <span class="font-medium text-slate-700 dark:text-slate-200">{{ $ticket->student->nim }}</span>
+                                @endcan
                             </dd>
                         </div>
                     @endif

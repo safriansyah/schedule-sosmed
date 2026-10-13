@@ -537,6 +537,8 @@ class TicketService
         ])->save();
 
         $this->syncInteractionStatus($ticket, $actor);
+        // The student was marked Closed with the ticket; they are open again too.
+        $this->syncStudentStatus($ticket);
 
         $this->log->log('ticket.reopened', "Membuka kembali tiket {$ticket->number}", $ticket);
 
@@ -593,13 +595,28 @@ class TicketService
         $ticket->save();
 
         // Keep the student record in step, so the next operator sees the new
-        // number without reading the follow-up history.
-        if ($student = $ticket->student) {
-            $student->forceFill(array_filter([
-                'nama' => $ticket->requester_name,
-                'no_hp_raw' => $ticket->requester_phone,
-                'email' => $ticket->requester_email,
-            ]))->save();
+        // number without reading the follow-up history — but only for someone
+        // allowed to edit student data, and only the fields that changed (a
+        // new phone number must not also overwrite the imported name).
+        if (($student = $ticket->student) && $actor->hasPermission(\App\Enums\Permission::ManageStudents)) {
+            $update = [];
+
+            if (isset($changes['requester_name'])) {
+                $update['nama'] = $ticket->requester_name;
+            }
+
+            if (isset($changes['requester_phone'])) {
+                $update['no_hp_raw'] = $ticket->requester_phone;
+                $update['no_hp'] = \App\Support\PhoneNumber::normalize($ticket->requester_phone);
+            }
+
+            if (isset($changes['requester_email'])) {
+                $update['email'] = $ticket->requester_email;
+            }
+
+            if ($update !== []) {
+                $student->forceFill($update)->save();
+            }
         }
 
         $this->log->log(

@@ -15,6 +15,9 @@ use RuntimeException;
  */
 class CsvReader
 {
+    /** The line number of the row last yielded (1-based). */
+    public int $line = 0;
+
     private string $path;
 
     public function __construct(string $path)
@@ -37,9 +40,14 @@ class CsvReader
 
         $delimiter = $this->sniffDelimiter();
         $first = true;
+        $this->line = 0;
 
         try {
             while (($row = fgetcsv($handle, 0, $delimiter, '"', '\\')) !== false) {
+                // Counted before the blank-line skip, so it stays the line
+                // number a spreadsheet program shows.
+                $this->line++;
+
                 // fgetcsv yields [null] for a blank line; skip it rather than
                 // counting it as a failed row.
                 if ($row === [null]) {

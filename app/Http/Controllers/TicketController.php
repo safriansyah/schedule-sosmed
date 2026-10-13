@@ -100,7 +100,9 @@ class TicketController extends Controller
             'flags' => TicketFlag::options(),
             'operators' => $this->operators(),
             'student' => $request->filled('student')
-                ? Student::find($request->integer('student'))
+                // Only a student this user could open: the form copies their
+                // name, NIM, phone and e-mail onto the new ticket.
+                ? Student::visibleTo($request->user())->find($request->integer('student'))
                 : null,
             // The admin's list of numbering formats (TKU, TKB, …). A manual
             // ticket may pick one; everything raised automatically uses the
@@ -123,8 +125,8 @@ class TicketController extends Controller
             'source' => ['required', 'string', \Illuminate\Validation\Rule::in(array_keys(TicketSource::manualOptions()))],
             'category_id' => ['nullable', 'integer', 'exists:ticket_categories,id'],
             'sub_category_id' => ['nullable', 'integer', 'exists:ticket_categories,id'],
-            'priority' => ['required', 'string', 'max:16'],
-            'flag' => ['nullable', 'string', 'max:16'],
+            'priority' => ['required', \Illuminate\Validation\Rule::enum(Priority::class)],
+            'flag' => ['nullable', \Illuminate\Validation\Rule::enum(TicketFlag::class)],
             'student_id' => ['nullable', 'integer', 'exists:students,id'],
             'requester_name' => ['nullable', 'string', 'max:255'],
             'requester_nim' => ['nullable', 'string', 'max:32'],
@@ -140,6 +142,12 @@ class TicketController extends Controller
             'source' => 'sumber',
             'priority' => 'prioritas',
         ]);
+
+        // The same rule on the way in: a student id the creator cannot see
+        // would copy someone else's personal data onto a ticket they can.
+        if (filled($data['student_id'] ?? null) && ! Student::visibleTo($request->user())->whereKey($data['student_id'])->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['student_id' => 'Mahasiswa ini tidak ada dalam data yang bisa Anda akses.']);
+        }
 
         // Only an assigner may hand the new ticket straight to someone.
         if (! $request->user()->hasPermission(Permission::AssignTickets)) {
@@ -228,7 +236,7 @@ class TicketController extends Controller
             'description' => ['nullable', 'string', 'max:10000'],
             'category_id' => ['nullable', 'integer', 'exists:ticket_categories,id'],
             'sub_category_id' => ['nullable', 'integer', 'exists:ticket_categories,id'],
-            'priority' => ['required', 'string', 'max:16'],
+            'priority' => ['required', \Illuminate\Validation\Rule::enum(Priority::class)],
             'requester_name' => ['nullable', 'string', 'max:255'],
             'requester_nim' => ['nullable', 'string', 'max:32'],
             'requester_nac' => ['nullable', 'string', 'max:64'],

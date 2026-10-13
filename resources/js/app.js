@@ -27,20 +27,25 @@ Alpine.store('theme', {
     dark: document.documentElement.classList.contains('dark'),
 
     init() {
-        this.dark = localStorage.getItem('theme')
-            ? localStorage.getItem('theme') === 'dark'
+        let saved = null;
+        try { saved = localStorage.getItem('theme'); } catch (e) {}
+
+        this.dark = saved
+            ? saved === 'dark'
             : window.matchMedia('(prefers-color-scheme: dark)').matches;
         this.apply();
     },
 
     toggle() {
         this.dark = !this.dark;
+        // Only an explicit choice is remembered; until then the page keeps
+        // following the device's light/dark setting.
+        try { localStorage.setItem('theme', this.dark ? 'dark' : 'light'); } catch (e) {}
         this.apply();
     },
 
     apply() {
         document.documentElement.classList.toggle('dark', this.dark);
-        localStorage.setItem('theme', this.dark ? 'dark' : 'light');
         window.dispatchEvent(new CustomEvent('theme-changed', { detail: { dark: this.dark } }));
     },
 });
@@ -67,13 +72,29 @@ window.toast = (message, type) => Alpine.store('toasts').push(message, type);
 /* ---------------------------------------------------------------------------
  | Sidebar UI store — mobile drawer + desktop compact mode
  * ------------------------------------------------------------------------- */
+// The compact sidebar is a desktop mode. On a phone or tablet the drawer is
+// always full width with its labels, whatever was chosen on the desktop — so
+// the remembered choice (`pinned`) only applies while the screen is wide.
+const wideScreen = window.matchMedia('(min-width: 1024px)');
+
 Alpine.store('ui', {
     sidebarOpen: false,
-    collapsed: localStorage.getItem('sidebar-collapsed') === '1',
+    pinned: (() => {
+        try { return localStorage.getItem('sidebar-collapsed') === '1'; } catch (e) { return false; }
+    })(),
+    wide: wideScreen.matches,
+
+    get collapsed() {
+        return this.pinned && this.wide;
+    },
+
+    init() {
+        wideScreen.addEventListener('change', (e) => { this.wide = e.matches; });
+    },
 
     toggleCollapsed() {
-        this.collapsed = !this.collapsed;
-        localStorage.setItem('sidebar-collapsed', this.collapsed ? '1' : '0');
+        this.pinned = !this.collapsed;
+        try { localStorage.setItem('sidebar-collapsed', this.pinned ? '1' : '0'); } catch (e) {}
     },
 });
 

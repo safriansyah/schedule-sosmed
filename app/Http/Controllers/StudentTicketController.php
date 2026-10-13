@@ -22,8 +22,9 @@ class StudentTicketController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        // Creating tickets, not assigning students — so this is the ticket
-        // permission, even though the button lives on the student screen.
+        // Tickets for a whole region at once: the Unsigned & Ticket screen's
+        // job, so its permission as well as the ticket one.
+        $this->authorize(Permission::AssignStudents->value);
         $this->authorize(Permission::CreateTickets->value);
 
         $filters = $request->only(

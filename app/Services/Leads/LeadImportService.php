@@ -13,6 +13,7 @@ use App\Support\Spreadsheet\CsvReader;
 use App\Support\Spreadsheet\XlsxReader;
 use Generator;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -62,6 +63,12 @@ class LeadImportService
 
     private const PREVIEW_ROWS = 20;
 
+    /** How far down to look for the heading row, past a title or blank rows. */
+    private const HEADER_SCAN = 10;
+
+    /** The reader behind rows(), for the row number Excel shows. */
+    private CsvReader|XlsxReader|null $reader = null;
+
     public function __construct(private readonly ActivityLogger $log) {}
 
     /* -----------------------------------------------------------------
@@ -73,6 +80,22 @@ class LeadImportService
         $extension = $this->realFormat($file);
 
         $path = $file->storeAs('lead-imports', Str::uuid()->toString().'.'.$extension, 'local');
+
+        // A renamed .docx or .zip also starts with "PK": make sure there is a
+        // worksheet to read before the upload is recorded at all.
+        if ($extension === 'xlsx') {
+            try {
+                $readable = (new XlsxReader(Storage::disk('local')->path($path)))->sheetNames() !== [];
+            } catch (Throwable) {
+                $readable = false;
+            }
+
+            if (! $readable) {
+                Storage::disk('local')->delete($path);
+
+                throw new RuntimeException('Berkas ini bukan workbook Excel yang bisa dibaca (tidak ada lembar kerja). Buka di Excel lalu Simpan Sebagai .xlsx.');
+            }
+        }
 
         $import = LeadImport::create([
             'original_name' => $file->getClientOriginalName(),
@@ -103,12 +126,24 @@ class LeadImportService
             return $empty;
         }
 
-        $headings = [];
+        $headings = null;
+        $first = null;
+        $scanned = 0;
         $rows = [];
 
-        foreach ($this->rows($import) as $index => $row) {
-            if ($index === 0) {
-                $headings = $row;
+        foreach ($this->rows($import) as $row) {
+            if ($headings === null) {
+                if ($this->isBlank($row)) {
+                    continue;
+                }
+
+                $first ??= $row;
+
+                if (self::isHeader($row)) {
+                    $headings = $row;
+                } elseif (++$scanned >= self::HEADER_SCAN) {
+                    break;
+                }
 
                 continue;
             }
@@ -122,6 +157,9 @@ class LeadImportService
             }
         }
 
+        // No heading row found: show the first row, so the missing columns
+        // are named.
+        $headings ??= $first ?? [];
         $mapping = self::bind($headings);
         $import->forceFill(['mapping' => $mapping])->save();
 
@@ -153,7 +191,9 @@ class LeadImportService
                 throw new RuntimeException('Berkas sumber tidak ditemukan lagi di server. Unggah ulang berkasnya.');
             }
 
-            $this->run($import);
+            // All or nothing: a file that fails half-way leaves no half of it
+            // behind, so fixing it and importing again is always safe.
+            DB::transaction(fn () => $this->run($import));
         } catch (Throwable $e) {
             if (! $e instanceof RuntimeException) {
                 report($e);
@@ -179,15 +219,26 @@ class LeadImportService
         $buffer = [];
         $mapping = null;
         $extraColumns = [];
+        $first = null;
+        $scanned = 0;
 
-        foreach ($this->rows($import) as $index => $row) {
+        foreach ($this->rows($import) as $row) {
             if ($mapping === null) {
-                $mapping = self::bind($row);
-
-                if ($missing = array_diff(self::REQUIRED, array_keys($mapping))) {
-                    throw new RuntimeException('Kolom wajib tidak ditemukan di berkas: '
-                        .implode(', ', array_map(fn ($f) => self::LABELS[$f], $missing)).'.');
+                if ($this->isBlank($row)) {
+                    continue;
                 }
+
+                $first ??= $row;
+
+                if (! self::isHeader($row)) {
+                    if (++$scanned >= self::HEADER_SCAN) {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                $mapping = self::bind($row);
 
                 $extraColumns = array_filter(
                     array_map('trim', array_diff_key($row, array_flip($mapping))),
@@ -198,8 +249,8 @@ class LeadImportService
                 continue;
             }
 
-            // Excel line numbers: the header is line 1.
-            $line = $index + 1;
+            // The row number Excel shows, blank rows included.
+            $line = $this->reader->line;
 
             if ($this->isBlank($row)) {
                 continue;
@@ -262,7 +313,14 @@ class LeadImportService
         }
 
         if ($mapping === null) {
-            throw new RuntimeException('Berkas kosong — tidak ada baris judul kolom.');
+            if ($first === null) {
+                throw new RuntimeException('Berkas kosong — tidak ada baris judul kolom.');
+            }
+
+            $missing = array_diff(self::REQUIRED, array_keys(self::bind($first)));
+
+            throw new RuntimeException('Kolom wajib tidak ditemukan di berkas: '
+                .implode(', ', array_map(fn ($f) => self::LABELS[$f], $missing)).'.');
         }
 
         if ($buffer !== []) {
@@ -363,12 +421,20 @@ class LeadImportService
         return $map;
     }
 
+    /** The heading row names every required column. */
+    private static function isHeader(array $row): bool
+    {
+        return array_diff(self::REQUIRED, array_keys(self::bind($row))) === [];
+    }
+
     /** @return Generator<int, array<int, string>> */
     private function rows(LeadImport $import): Generator
     {
-        return $import->extension === 'xlsx'
-            ? (new XlsxReader($this->path($import), $import->sheet))->rows()
-            : (new CsvReader($this->path($import)))->rows();
+        $this->reader = $import->extension === 'xlsx'
+            ? new XlsxReader($this->path($import), $import->sheet)
+            : new CsvReader($this->path($import));
+
+        return $this->reader->rows();
     }
 
     /** @return array<int, string> */
@@ -386,7 +452,9 @@ class LeadImportService
         $bestScore = -1;
 
         foreach ($sheets as $sheet) {
-            foreach ((new XlsxReader($path, $sheet))->rows() as $row) {
+            // The heading row may sit under a title, so the best of the first
+            // few rows counts.
+            foreach ((new XlsxReader($path, $sheet))->rows() as $i => $row) {
                 $map = self::bind($row);
                 $score = count(array_intersect(self::REQUIRED, array_keys($map))) * 10 + count($map);
 
@@ -394,7 +462,9 @@ class LeadImportService
                     [$best, $bestScore] = [$sheet, $score];
                 }
 
-                break;
+                if ($i + 1 >= self::HEADER_SCAN) {
+                    break;
+                }
             }
         }
 

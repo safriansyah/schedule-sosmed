@@ -64,7 +64,10 @@ class GuestBookEntry extends Model
                 });
             } catch (QueryException $e) {
                 // 23000 = integrity constraint: someone else took the number.
-                if ($attempt >= 5 || $e->getCode() !== '23000') {
+                // 40001 = deadlock: two first-of-the-day visitors lock the same
+                // empty range and MySQL picks one to roll back. Both are just
+                // "try again".
+                if ($attempt >= 5 || ! in_array($e->getCode(), ['23000', '40001'], true)) {
                     throw $e;
                 }
             }

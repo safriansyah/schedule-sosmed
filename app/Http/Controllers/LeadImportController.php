@@ -74,7 +74,25 @@ class LeadImportController extends Controller
             $import->forceFill(['sheet' => $request->input('sheet')])->save();
         }
 
-        return view('leads.import.preview', $this->service->preview($import) + [
+        // A file that cannot be read after all is the admin's to fix: say so on
+        // the upload form instead of a 500, and close this import off.
+        try {
+            $preview = $this->service->preview($import);
+        } catch (Throwable $e) {
+            report($e);
+
+            $import->forceFill([
+                'status' => LeadImport::STATUS_FAILED,
+                'error_message' => mb_substr($e->getMessage(), 0, 1000),
+                'finished_at' => now(),
+            ])->save();
+
+            return redirect()->route('leads.import.index')->withErrors([
+                'file' => $e instanceof RuntimeException ? $e->getMessage() : 'Berkas tidak bisa dibaca. Unggah ulang berkasnya.',
+            ]);
+        }
+
+        return view('leads.import.preview', $preview + [
             'import' => $import,
             'labels' => LeadImportService::LABELS,
         ]);

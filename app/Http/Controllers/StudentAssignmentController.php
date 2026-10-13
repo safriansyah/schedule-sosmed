@@ -23,6 +23,9 @@ use Illuminate\Http\Request;
  */
 class StudentAssignmentController extends Controller
 {
+    /** The Unsigned list's non-region filters, carried by "Buat Ticket per Wilayah". */
+    public const LIST_FILTERS = ['q', 'kondisi', 'semester', 'operator', 'segmen', 'status_dp', 'import'];
+
     public function __construct(private readonly StudentAssigner $assigner) {}
 
     /** Manual select: the ticked rows go to one operator. */
@@ -71,6 +74,9 @@ class StudentAssignmentController extends Controller
      */
     public function byRegion(Request $request, StudentTicketGenerator $generator): RedirectResponse
     {
+        // The Unsigned & Ticket screen's actions: they hand out students in
+        // bulk, so they need AssignStudents like the screen itself.
+        $this->authorize(Permission::AssignStudents->value);
         $this->authorize(Permission::CreateTickets->value);
         $this->authorize(Permission::AssignTickets->value);
 
@@ -82,7 +88,13 @@ class StudentAssignmentController extends Controller
             ])->withInput();
         }
 
-        $result = $generator->generate($region, $request->user(), $operator);
+        // The list's other filters too, so the button does what its count says.
+        $listFilters = array_filter(
+            $request->only(self::LIST_FILTERS),
+            fn ($v) => is_string($v) && $v !== '' && mb_strlen($v) <= 128,
+        );
+
+        $result = $generator->generate($region + $listFilters, $request->user(), $operator);
         $where = $this->describe($region);
 
         if ($result['created'] === 0) {
@@ -105,6 +117,9 @@ class StudentAssignmentController extends Controller
     /** "Buat Ticket Terpilih": the students ticked in the list, to one operator. */
     public function selectedTickets(Request $request, StudentTicketGenerator $generator): RedirectResponse
     {
+        // The Unsigned & Ticket screen's actions: they hand out students in
+        // bulk, so they need AssignStudents like the screen itself.
+        $this->authorize(Permission::AssignStudents->value);
         $this->authorize(Permission::CreateTickets->value);
         $this->authorize(Permission::AssignTickets->value);
 
@@ -136,7 +151,9 @@ class StudentAssignmentController extends Controller
      */
     public function move(Request $request): RedirectResponse
     {
-        // Moving tickets between operators is assigning them.
+        // Moving tickets between operators is assigning them — a whole
+        // region's worth, so only from the Unsigned & Ticket screen's role.
+        $this->authorize(Permission::AssignStudents->value);
         $this->authorize(Permission::AssignTickets->value);
 
         $request->validate([

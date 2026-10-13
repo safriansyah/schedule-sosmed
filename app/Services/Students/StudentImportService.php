@@ -45,6 +45,9 @@ class StudentImportService
     /** @var array<string, int>|null Cached column => max length. */
     private ?array $limits = null;
 
+    /** The reader behind readRows(), for the row number Excel shows. */
+    private CsvReader|XlsxReader|null $reader = null;
+
     public function __construct(
         private readonly StudentRowMapper $mapper,
         private readonly ActivityLogger $log,
@@ -236,7 +239,9 @@ class StudentImportService
                 continue;
             }
 
-            $line = $index + 1;
+            // The row number Excel shows: blank rows are skipped by the
+            // reader, so counting yields would drift.
+            $line = $this->reader?->line ?: $index + 1;
 
             // A trailing blank line is not an error.
             if ($this->isBlank($row)) {
@@ -398,10 +403,12 @@ class StudentImportService
     /** @return Generator<int, array<int, string>> */
     private function readRows(string $path, ?string $extension, ?string $sheet = null): Generator
     {
-        return match (strtolower((string) $extension)) {
-            'xlsx', 'xls' => (new XlsxReader($path, $sheet))->rows(),
-            default => (new CsvReader($path))->rows(),
+        $this->reader = match (strtolower((string) $extension)) {
+            'xlsx', 'xls' => new XlsxReader($path, $sheet),
+            default => new CsvReader($path),
         };
+
+        return $this->reader->rows();
     }
 
     /**

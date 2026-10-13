@@ -56,7 +56,10 @@
                            inputmode="tel" autocomplete="tel" class="input" placeholder="0812 3456 7890">
                     @error('whatsapp') <p class="form-error">{{ $message }}</p> @enderror
                 </div>
-                <div x-data="{ same: false }">
+                {{-- While ticked, the HP number follows every edit of the WhatsApp
+                     number, not just the value at the moment of ticking. --}}
+                <div x-data="{ same: false }"
+                     x-init="document.getElementById('whatsapp').addEventListener('input', e => { if (same) $refs.phone.value = e.target.value })">
                     <label for="phone" class="label">No. HP aktif <span class="text-rose-500">*</span></label>
                     <input id="phone" name="phone" value="{{ old('phone') }}" required maxlength="20"
                            inputmode="tel" class="input" placeholder="0812 3456 7890"

@@ -37,7 +37,7 @@ it('never shows a write button to a role that cannot use it', function () {
      */
     $guarded = [
         'students/assign/region' => \App\Enums\Permission::AssignStudents,
-        'students/generate-tickets' => \App\Enums\Permission::CreateTickets,
+        'students/generate-tickets' => \App\Enums\Permission::AssignStudents,
         'students/assign/selected' => \App\Enums\Permission::AssignStudents,
         'students/import' => \App\Enums\Permission::ImportStudents,
         'tickets/categories' => \App\Enums\Permission::ManageTicketCategories,

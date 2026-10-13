@@ -28,6 +28,9 @@ use ZipArchive;
  */
 class XlsxReader
 {
+    /** The worksheet row number of the row last yielded (1-based, as Excel shows it). */
+    public int $line = 0;
+
     /** Shared-string table, loaded once per file. */
     private array $strings = [];
 
@@ -60,6 +63,7 @@ class XlsxReader
         }
 
         $sheetName = $this->firstSheetPath($zip);
+        $this->line = 0;
         $this->strings = $this->sharedStrings($zip);
 
         // XMLReader cannot read from inside the archive, so the sheet is
@@ -87,6 +91,10 @@ class XlsxReader
             // sibling row, so calling read() as well would step over one and
             // silently return every other line.
             while ($reader->nodeType === XMLReader::ELEMENT && $reader->name === 'row') {
+                // The row number Excel shows, from the row's own r="…": rows
+                // with nothing in them are absent from the XML, so counting
+                // yields would drift.
+                $this->line = (int) $reader->getAttribute('r') ?: $this->line + 1;
                 $xml = $reader->readOuterXml();
 
                 if ($xml !== '') {

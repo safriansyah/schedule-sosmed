@@ -164,7 +164,10 @@ class StudentController extends Controller
 
         return view('students.show', [
             'student' => $student,
+            // Only the tickets this user could open: an operator sees their own
+            // case, not a colleague's subject line and a link that 403s.
             'tickets' => $student->tickets()
+                ->visibleTo($request->user())
                 ->with(['assignee:id,name', 'category:id,name'])
                 ->orderByDesc('id')
                 ->get(),
@@ -198,8 +201,8 @@ class StudentController extends Controller
             'kabupaten' => ['nullable', 'string', 'max:128'],
             'kecamatan' => ['nullable', 'string', 'max:128'],
             'kelurahan' => ['nullable', 'string', 'max:128'],
-            'kategori_masalah' => ['nullable', 'string', 'max:48'],
-            'assignment_status' => ['nullable', 'string', 'max:32'],
+            'kategori_masalah' => ['nullable', \Illuminate\Validation\Rule::enum(\App\Enums\StudentCondition::class)],
+            'assignment_status' => ['nullable', \Illuminate\Validation\Rule::enum(\App\Enums\AssignmentStatus::class)],
             'catatan' => ['nullable', 'string', 'max:5000'],
         ], [], [
             'nama' => 'nama',

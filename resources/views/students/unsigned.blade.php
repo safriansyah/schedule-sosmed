@@ -202,10 +202,15 @@
             @error('kabupaten') <p class="form-error mb-3">{{ $message }}</p> @enderror
             @error('generate') <p class="form-error mb-3">{{ $message }}</p> @enderror
 
-            {{-- The chosen region travels as hidden inputs, so the action works
-                 on exactly what the list above is showing. --}}
+            {{-- The chosen region AND the other filters travel as hidden inputs,
+                 so the action works on exactly the students the count shows. --}}
             @foreach ($regionLevels as $level)
                 <input type="hidden" name="{{ $level }}" value="{{ $filters[$level] ?? '' }}">
+            @endforeach
+            @foreach (\App\Http\Controllers\StudentAssignmentController::LIST_FILTERS as $key)
+                @if (filled($filters[$key] ?? null) && is_string($filters[$key]))
+                    <input type="hidden" name="{{ $key }}" value="{{ $filters[$key] }}">
+                @endif
             @endforeach
 
             @if ($regionChosen)

@@ -236,7 +236,7 @@
                              never lands on a collapsed menu. --}}
                         <div x-data="{ open: @js($open) }" class="select-none">
                             <button type="button"
-                                    @click="$store.ui.collapsed ? $store.ui.collapsed = false : open = !open"
+                                    @click="$store.ui.collapsed ? $store.ui.toggleCollapsed() : open = !open"
                                     @class(['nav-link w-full', 'text-slate-900 dark:text-white' => $open])
                                     :class="$store.ui.collapsed && 'lg:justify-center lg:px-0'"
                                     title="{{ $item['label'] }}">

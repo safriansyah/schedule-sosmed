@@ -92,7 +92,14 @@ class GuestBookController extends Controller
                 ? ($entry->called_at ?? now())
                 : ($status === GuestBookStatus::Waiting ? null : $entry->called_at),
             'finished_at' => $status->isActive() ? null : now(),
-        ])->save();
+        ] + ($status === GuestBookStatus::Done ? [] : [
+            // Back in the queue (or skipped): the old "Selesai" details no
+            // longer describe this visit, and must not reach the ledger.
+            'service_process' => null,
+            'resolution' => null,
+            'completed_by' => null,
+            'completion_note' => null,
+        ]))->save();
 
         $this->log->log(
             'guest_book.status',
