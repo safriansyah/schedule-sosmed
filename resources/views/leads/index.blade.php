@@ -8,7 +8,7 @@
         </div>
 
         <div class="flex flex-wrap gap-2">
-            @can(\App\Enums\Permission::ExportData->value)
+            @can(\App\Enums\Permission::ExportLeads->value)
                 {{-- Same filters as the list below: what you see is what you get. --}}
                 <a href="{{ route('leads.export', array_filter($filters)) }}" class="btn-outline">
                     <x-icon name="download" class="h-4 w-4"/> Download XLSX

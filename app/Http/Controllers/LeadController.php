@@ -36,8 +36,7 @@ class LeadController extends Controller
     /** Download what the list shows — same search and filters, newest first. */
     public function export(Request $request, Exporter $exporter, ActivityLogger $log)
     {
-        $this->authorize(Permission::ViewLeads->value);
-        $this->authorize(Permission::ExportData->value);
+        $this->authorize(Permission::ExportLeads->value);
 
         [$query, $filters] = $this->filtered($request);
 

@@ -209,8 +209,12 @@ it('downloads the filtered lead list as xlsx, newest first', function () {
         ->not->toContain('Lead Uji Unduh Lain')                  // other source
         ->and(strpos($sheet, 'Lead Uji Unduh Baru'))->toBeLessThan(strpos($sheet, 'Lead Uji Unduh Lama'));
 
-    // Viewing is not exporting: the Director sees the list, not the button.
+    // The Director may download leads too — without getting the other exports.
     $director = User::withRole(RoleName::Director)->firstOrFail();
-    $this->actingAs($director)->get(route('leads.index'))->assertOk()->assertDontSee(route('leads.export'));
-    $this->actingAs($director)->get(route('leads.export'))->assertForbidden();
+    $this->actingAs($director)->get(route('leads.index'))->assertOk()->assertSee(route('leads.export'));
+    $this->actingAs($director)->get(route('leads.export'))->assertOk();
+    expect($director->can(\App\Enums\Permission::ExportData->value))->toBeFalse();
+
+    // Roles without Data Lead get neither.
+    $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())->get(route('leads.export'))->assertForbidden();
 });

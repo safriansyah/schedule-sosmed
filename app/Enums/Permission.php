@@ -61,6 +61,7 @@ enum Permission: string
     // Data Lead (calon mahasiswa dari iklan, sosprom, mitra, UT Pusat)
     case ViewLeads = 'lead.view';
     case ImportLeads = 'lead.import';
+    case ExportLeads = 'lead.export';
 
     // Ticketing
     case ViewTickets = 'ticket.view';
@@ -128,6 +129,7 @@ enum Permission: string
             self::AssignStudents => 'Bagikan mahasiswa ke operator',
             self::ViewLeads => 'Lihat data lead',
             self::ImportLeads => 'Import data lead',
+            self::ExportLeads => 'Download data lead (XLSX)',
             self::ViewTickets => 'Lihat tiket',
             self::ViewAllTickets => 'Lihat tiket seluruh operator',
             self::CreateTickets => 'Buat tiket',
