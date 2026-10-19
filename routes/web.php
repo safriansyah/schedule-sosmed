@@ -308,6 +308,11 @@ Route::middleware('auth')->group(function () {
     Route::get('antrian', [GuestBookController::class, 'index'])->name('guest-book.admin.index');
     Route::get('antrian/rows', [GuestBookController::class, 'rows'])->name('guest-book.admin.rows');
     Route::get('antrian/export', [GuestBookController::class, 'export'])->name('guest-book.admin.export');
+    // Penilaian Layanan: visitors' stars & reviews (read: desk; change: admin).
+    Route::get('antrian/penilaian', [\App\Http\Controllers\GuestBookRatingController::class, 'index'])->name('guest-book.ratings.index');
+    Route::get('antrian/penilaian/export', [\App\Http\Controllers\GuestBookRatingController::class, 'export'])->name('guest-book.ratings.export');
+    Route::put('antrian/penilaian/{entry}', [\App\Http\Controllers\GuestBookRatingController::class, 'update'])->name('guest-book.ratings.update');
+    Route::delete('antrian/penilaian/{entry}', [\App\Http\Controllers\GuestBookRatingController::class, 'destroy'])->name('guest-book.ratings.destroy');
     Route::post('antrian/{entry}/status', [GuestBookController::class, 'status'])->name('guest-book.admin.status');
     Route::post('antrian/{entry}/complete', [GuestBookController::class, 'complete'])->name('guest-book.admin.complete');
     Route::post('antrian/{entry}/ticket', [GuestBookController::class, 'ticket'])->name('guest-book.admin.ticket');

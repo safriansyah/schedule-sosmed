@@ -62,6 +62,8 @@
                 </a>
             </div>
 
+            <x-ut-whatsapp message="Halo UT Pangkalpinang, saya ingin bertanya tentang antrian {{ $entry->displayNumber() }}."/>
+
             <p class="text-xs text-slate-400">Simpan atau foto layar ini sebagai bukti nomor antrian Anda.</p>
         </div>
     </div>

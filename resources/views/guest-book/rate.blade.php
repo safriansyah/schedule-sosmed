@@ -100,6 +100,8 @@
                     <p class="text-center text-xs text-slate-400">Penilaian hanya bisa dikirim sekali.</p>
                 </form>
             @endif
+
+            <x-ut-whatsapp message="Halo UT Pangkalpinang, saya ingin bertanya tentang layanan saya (antrian {{ $entry->displayNumber() }})."/>
         </div>
     </div>
 </x-layouts.public>

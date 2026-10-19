@@ -84,4 +84,12 @@ return [
         'timeout' => (int) env('GEMINI_TIMEOUT', 60),
     ],
 
+    /*
+    | WhatsApp resmi UT Pangkalpinang — tujuan tombol "Chat WhatsApp" yang
+    | dilihat tamu (halaman nomor antrian & penilaian). Format 62…
+    */
+    'ut' => [
+        'whatsapp' => env('UT_WHATSAPP', '6281171700035'),
+    ],
+
 ];

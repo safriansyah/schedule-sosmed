@@ -120,12 +120,6 @@
                 <x-icon name="eye" class="h-3.5 w-3.5"/> Detail
             </button>
 
-            @if ($payload['rating_wa_url'])
-                <a href="{{ $payload['rating_wa_url'] }}" target="_blank" rel="noopener" class="btn-outline btn-sm"
-                   title="Kirim tautan penilaian ke WhatsApp tamu">
-                    <x-icon name="star" class="h-3.5 w-3.5 text-amber-500"/> Minta Penilaian
-                </a>
-            @endif
 
             @unless ($entry->hasTicket())
                 @if ($status === GuestBookStatus::Waiting)

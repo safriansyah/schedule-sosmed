@@ -75,6 +75,7 @@ enum Permission: string
 
     // Buku Tamu / Antrian (sisi petugas; formulir & monitornya publik)
     case ManageGuestBook = 'guestbook.manage';
+    case ManageGuestBookRatings = 'guestbook.rating';   // ubah / hapus penilaian tamu
 
     // Task management
     case ViewTasks = 'task.view';
@@ -139,6 +140,7 @@ enum Permission: string
             self::CloseTickets => 'Tutup tiket',
             self::ManageTicketCategories => 'Kelola kategori tiket',
             self::ManageGuestBook => 'Kelola buku tamu & antrian',
+            self::ManageGuestBookRatings => 'Ubah & hapus penilaian tamu',
             self::ViewTasks => 'Lihat task management',
             self::ManageTasks => 'Kelola task',
             self::PublishTasks => 'Publikasikan task ke halaman publik',

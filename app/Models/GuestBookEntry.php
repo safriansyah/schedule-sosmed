@@ -130,7 +130,6 @@ class GuestBookEntry extends Model
             'rated_at' => $this->rated_at?->timezone('Asia/Jakarta')->translatedFormat('d M Y, H:i'),
             // Only once there is something to rate, and not after it was rated.
             'rating_url' => $this->canBeRated() ? $this->ratingUrl() : null,
-            'rating_wa_url' => $this->canBeRated() ? $this->ratingWhatsAppUrl() : null,
             'ticket_create_url' => route('guest-book.admin.ticket', $this),
         ];
     }
@@ -172,14 +171,6 @@ class GuestBookEntry extends Model
             .\Illuminate\Support\Facades\URL::signedRoute('guest-book.rate', $this, absolute: false);
     }
 
-    /** "Kirim via WhatsApp": the link, ready to send to the visitor's number. */
-    public function ratingWhatsAppUrl(): ?string
-    {
-        $message = "Halo {$this->name}, terima kasih telah berkunjung ke layanan UT Pangkalpinang (antrian {$this->displayNumber()}). "
-            .'Mohon beri penilaian dan ulasan untuk layanan kami di tautan berikut: '.$this->ratingUrl();
-
-        return \App\Support\PhoneNumber::waLink($this->whatsapp, $message);
-    }
 
     /** Entries of today's queue (WIB). */
     public function scopeToday(Builder $query): Builder

@@ -23,7 +23,7 @@ function ratingEntry(GuestBookStatus $status = GuestBookStatus::Done, array $ove
     return GuestBookEntry::forceCreate($overrides + [
         'queue_date' => now('Asia/Jakarta')->toDateString(),
         'queue_number' => 800 + random_int(0, 199),
-        'whatsapp' => '6281299991001', 'phone' => '6281299991001',
+        'whatsapp' => '6280000000001', 'phone' => '6280000000001', // fiktif, hanya untuk tes
         'name' => 'Tamu Penilai', 'gender' => 'perempuan',
         'service' => GuestBookService::cases()[0]->value,
         'status' => $status->value,
@@ -101,23 +101,71 @@ it('offers the rating on the visitor\'s own confirmation page once served', func
         ->assertSee('Beri Penilaian');
 });
 
-it('shows the desk the rating, the average, and a WhatsApp link to ask for one', function () {
+it('shows the desk each rating on the queue, without any WhatsApp sending', function () {
     $rated = ratingEntry(overrides: ['name' => 'Tamu Sudah Menilai', 'rating' => 4, 'review' => 'Bagus sekali', 'rated_at' => now()]);
     $unrated = ratingEntry(overrides: ['name' => 'Tamu Belum Menilai']);
-    $frontdesk = User::withRole(RoleName::Frontdesk)->firstOrFail();
     $today = now('Asia/Jakarta')->toDateString();
 
-    $this->actingAs($frontdesk)
+    $this->actingAs(User::withRole(RoleName::Frontdesk)->firstOrFail())
         ->get(route('guest-book.admin.rows', ['from' => $today, 'to' => $today, 'filter' => 'all', 'q' => 'Tamu']))
         ->assertOk()
         ->assertSee('Rating rata-rata')
         ->assertSee('Bagus sekali')
-        ->assertSee('Minta Penilaian');
+        ->assertDontSee('Minta Penilaian')
+        ->assertDontSee('Kirim via WhatsApp')
+        ->assertDontSee('wa.me/6280000000001?text=', false);
 
-    // The WhatsApp link carries a signed rating URL on the public domain.
-    expect($unrated->ratingWhatsAppUrl())->toStartWith('https://wa.me/6281299991001?text=')
-        ->and(urldecode($unrated->ratingWhatsAppUrl()))->toContain(rtrim(config('app.url'), '/').'/guest-book/nilai/'.$unrated->id.'?signature=')
+    // The visitor's link is built on the public domain, and signed.
+    expect($unrated->ratingUrl())->toContain(rtrim(config('app.url'), '/').'/guest-book/nilai/'.$unrated->id.'?signature=')
         ->and($rated->canBeRated())->toBeFalse();
+});
+
+it('shows Penilaian Layanan to the desk read-only, and lets only the admin change or delete', function () {
+    $entry = ratingEntry(overrides: ['name' => 'Tamu Ulasan Uji', 'rating' => 2, 'review' => 'Antrian terlalu lama', 'rated_at' => now()]);
+    $frontdesk = User::withRole(RoleName::Frontdesk)->firstOrFail();
+    $manager = User::withRole(RoleName::Manager)->firstOrFail();
+
+    // The desk reads it, without the buttons, and the server refuses changes.
+    $this->actingAs($frontdesk)->get(route('guest-book.ratings.index', ['q' => 'Tamu Ulasan Uji']))
+        ->assertOk()
+        ->assertSee('Antrian terlalu lama')
+        ->assertDontSee(route('guest-book.ratings.update', $entry), false)
+        ->assertDontSee(route('guest-book.ratings.destroy', $entry), false);
+    $this->actingAs($frontdesk)->put(route('guest-book.ratings.update', $entry), ['rating' => 5])->assertForbidden();
+    $this->actingAs($frontdesk)->delete(route('guest-book.ratings.destroy', $entry))->assertForbidden();
+    expect($entry->fresh()->rating)->toBe(2);
+
+    // Roles outside the Buku Tamu do not see it at all.
+    $this->actingAs(User::withRole(RoleName::Operator)->firstOrFail())->get(route('guest-book.ratings.index'))->assertForbidden();
+
+    // The admin corrects, then removes; the visit itself stays.
+    $this->actingAs($manager)->get(route('guest-book.ratings.index', ['q' => 'Tamu Ulasan Uji']))
+        ->assertOk()->assertSee(route('guest-book.ratings.update', $entry), false);
+
+    $this->actingAs($manager)->put(route('guest-book.ratings.update', $entry), ['rating' => 3, 'review' => 'Antrian agak lama'])->assertRedirect();
+    expect($entry->fresh())->rating->toBe(3)->review->toBe('Antrian agak lama');
+
+    $this->actingAs($manager)->delete(route('guest-book.ratings.destroy', $entry))->assertRedirect();
+    expect($entry->fresh())->rating->toBeNull()->review->toBeNull()->and(GuestBookEntry::whereKey($entry->id)->exists())->toBeTrue();
+});
+
+it('filters the ratings by stars and downloads them as xlsx', function () {
+    ratingEntry(overrides: ['name' => 'Tamu Lima Bintang', 'rating' => 5, 'review' => 'Mantap', 'rated_at' => now()]);
+    ratingEntry(overrides: ['name' => 'Tamu Satu Bintang', 'rating' => 1, 'review' => 'Kecewa', 'rated_at' => now()]);
+    $frontdesk = User::withRole(RoleName::Frontdesk)->firstOrFail();
+
+    $this->actingAs($frontdesk)->get(route('guest-book.ratings.index', ['rating' => 1, 'q' => 'Tamu']))
+        ->assertOk()->assertSee('Tamu Satu Bintang')->assertDontSee('Tamu Lima Bintang');
+
+    $response = $this->actingAs($frontdesk)->get(route('guest-book.ratings.export', ['q' => 'Tamu']))->assertOk();
+    expect($response->headers->get('content-disposition'))->toContain('penilaian-layanan-')->toContain('.xlsx');
+
+    $zip = new ZipArchive;
+    $zip->open($response->getFile()->getPathname());
+    $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+    $zip->close();
+
+    expect($sheet)->toContain('Bintang (1-5)')->toContain('Ulasan')->toContain('Tamu Lima Bintang')->toContain('Kecewa')->toContain('Sangat baik');
 });
 
 it('filters Unsigned & Ticket by kategori masalah, with counts', function () {
@@ -137,4 +185,15 @@ it('filters Unsigned & Ticket by kategori masalah, with counts', function () {
         ->assertOk()->assertDontSee('KATMAS0001');
     $this->actingAs($manager)->get(route('students.unsigned', ['kabupaten' => 'Kabupaten Kategori', 'kondisi' => 'admisi_gagal_validasi']))
         ->assertOk()->assertSee('KATMAS0001');
+});
+
+it('points the visitor\'s WhatsApp button at the official UT Pangkalpinang number', function () {
+    $entry = ratingEntry();
+
+    $this->get(rateUrl($entry))->assertOk()
+        ->assertSee('https://wa.me/6281171700035?text=', false)
+        ->assertSee('0811-7170-0035');
+
+    $this->withSession(['guest_book.entry_id' => $entry->id])->get(route('guest-book.done'))
+        ->assertOk()->assertSee('https://wa.me/6281171700035?text=', false);
 });

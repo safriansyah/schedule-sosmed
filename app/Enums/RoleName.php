@@ -190,6 +190,7 @@ enum RoleName: string
                 Permission::HandleTickets,
                 Permission::EditTickets,
                 Permission::ManageGuestBook,
+                Permission::ManageGuestBookRatings,
                 Permission::AssignTickets,
                 Permission::CloseTickets,
                 Permission::ManageTicketCategories,
