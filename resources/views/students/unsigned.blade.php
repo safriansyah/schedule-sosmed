@@ -34,19 +34,9 @@
          act on, so nobody has to hold two different selections in their head. --}}
     <form method="GET" id="student-filter" class="card mb-4 p-4">
         <div class="grid gap-3 lg:grid-cols-12">
-            <div class="lg:col-span-4">
+            <div class="lg:col-span-5">
                 <label for="q" class="label">Cari</label>
                 <input id="q" name="q" value="{{ $filters['q'] ?? '' }}" class="input" placeholder="NIM, NAC, nama…">
-            </div>
-
-            <div class="lg:col-span-4">
-                <label for="kondisi" class="label">Kondisi</label>
-                <select id="kondisi" name="kondisi" class="input" onchange="this.form.submit()">
-                    <option value="">Semua kondisi</option>
-                    @foreach ($conditions as $value => $label)
-                        <option value="{{ $value }}" @selected(($filters['kondisi'] ?? '') === $value)>{{ $label }}</option>
-                    @endforeach
-                </select>
             </div>
 
             <div class="lg:col-span-4">
@@ -61,7 +51,7 @@
                 </select>
             </div>
 
-            <div class="flex items-end gap-2 lg:col-span-4">
+            <div class="flex items-end gap-2 lg:col-span-3">
                 <button class="btn-primary flex-1"><x-icon name="filter" class="h-4 w-4"/> Terapkan</button>
                 @if ($carried)
                     <a href="{{ route('students.unsigned') }}" class="btn-outline shrink-0">Reset</a>
@@ -74,9 +64,9 @@
              because "this export has no kelurahan" is information and a
              selector that silently vanishes looks like a bug. --}}
         <div class="mt-3 border-t border-slate-200 pt-3 dark:border-white/5">
-            <p class="label mb-2">Wilayah</p>
+            <p class="label mb-2">Wilayah &amp; Kategori Masalah</p>
 
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                 @foreach ($regionLevels as $level)
                     @php $options = $regions[$level] ?? []; @endphp
                     <div>
@@ -94,6 +84,28 @@
                         </select>
                     </div>
                 @endforeach
+
+                {{-- Kategori masalah: the file's "Sub Katagori" / "Kondisi". Counted
+                     like the region pickers, within the rest of the filter. --}}
+                <div>
+                    <label for="kondisi" class="mb-1 block text-[11px] font-medium text-slate-500 dark:text-slate-400"
+                           title="Kolom Sub Katagori / Sub Kategori / Kondisi / Kategori Masalah / Masalah di berkas import">
+                        Kategori Masalah
+                        <span class="text-slate-300 dark:text-slate-600">({{ $conditionCounts->count() }})</span>
+                    </label>
+
+                    <select id="kondisi" name="kondisi" class="input !py-2 !text-xs" onchange="this.form.submit()">
+                        <option value="">Semua kategori</option>
+                        @foreach ($conditions as $value => $label)
+                            @php $count = (int) ($conditionCounts[$value] ?? 0); @endphp
+                            @if ($count > 0 || ($filters['kondisi'] ?? '') === $value)
+                                <option value="{{ $value }}" @selected(($filters['kondisi'] ?? '') === $value)>
+                                    {{ $label }} ({{ number_format($count) }})
+                                </option>
+                            @endif
+                        @endforeach
+                    </select>
+                </div>
             </div>
         </div>
     </form>

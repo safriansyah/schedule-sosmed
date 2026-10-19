@@ -135,6 +135,15 @@ class StudentController extends Controller
             'regionLevels' => StudentStats::REGION_LEVELS,
             'regionLabels' => StudentStats::regionLabels(),
             'conditions' => StudentCondition::options(),
+            // Kategori masalah ("Sub Katagori" in the file) beside the region
+            // pickers, each with how many ticketless students it holds within
+            // the rest of the filter — so an empty choice is visible up front.
+            'conditionCounts' => Student::query()
+                ->filtered(Arr::except($filters, ['kondisi']))
+                ->whereDoesntHave('tickets')
+                ->selectRaw('kategori_masalah, COUNT(*) AS total')
+                ->groupBy('kategori_masalah')
+                ->pluck('total', 'kategori_masalah'),
             'imports' => $this->importOptions(),
             'operators' => $this->operators(),
             'perPageOptions' => self::PER_PAGE,

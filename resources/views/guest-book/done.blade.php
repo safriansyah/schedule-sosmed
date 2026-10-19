@@ -36,6 +36,23 @@
                 @endif
             </div>
 
+            {{-- Once served: the visitor rates the visit, from here or from the
+                 WhatsApp link the desk sends. --}}
+            @if ($entry->canBeRated())
+                <a href="{{ \Illuminate\Support\Facades\URL::signedRoute('guest-book.rate', $entry, absolute: false) }}"
+                   class="flex items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 py-3 text-sm font-bold text-amber-950 shadow-sm transition hover:bg-amber-300">
+                    <x-icon name="star" class="h-5 w-5"/> Layanan selesai — Beri Penilaian
+                </a>
+            @elseif ($entry->hasRating())
+                <p class="rounded-2xl bg-emerald-500/[0.07] p-3 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                    Terima kasih, penilaian Anda ({{ $entry->rating }} bintang) sudah kami terima.
+                </p>
+            @else
+                {{-- Still being served: check back by itself, so the rating
+                     button appears without the visitor reloading. --}}
+                <script>setTimeout(() => location.reload(), 30000);</script>
+            @endif
+
             <div class="grid gap-2 sm:grid-cols-2">
                 <a href="{{ route('guest-book.monitor') }}" class="btn-primary w-full">
                     <x-icon name="monitor" class="h-4 w-4"/> Lihat Monitor Antrian

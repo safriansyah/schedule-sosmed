@@ -24,6 +24,9 @@ use Illuminate\View\View;
  * id in the URL), and watch the monitor, whose JSON is a whitelist of
  * number / short name / service / status. Nothing here reads or changes
  * anything an operator owns.
+ *
+ * The one exception is the visitor's rating of their own finished visit,
+ * reached through a signed link (the id alone opens nothing), written once.
  */
 class PublicGuestBookController extends Controller
 {
@@ -122,6 +125,55 @@ class PublicGuestBookController extends Controller
             : 0;
 
         return view('guest-book.done', ['entry' => $entry, 'ahead' => $ahead]);
+    }
+
+    /**
+     * "Beri Penilaian": stars and a review for a finished visit. Opened from
+     * the confirmation page or the WhatsApp link the desk sends.
+     */
+    public function rate(GuestBookEntry $entry): View
+    {
+        return view('guest-book.rate', [
+            'entry' => $entry->loadMissing('ticket:id,number,status'),
+            'action' => \Illuminate\Support\Facades\URL::signedRoute('guest-book.rate.store', $entry, absolute: false),
+        ]);
+    }
+
+    public function storeRating(Request $request, GuestBookEntry $entry): RedirectResponse
+    {
+        $entry->loadMissing('ticket:id,number,status');
+        $back = \Illuminate\Support\Facades\URL::signedRoute('guest-book.rate', $entry, absolute: false);
+
+        // Rated already (a second tab, a double tap): the first answer stands.
+        if ($entry->hasRating()) {
+            return redirect($back);
+        }
+
+        if (! $entry->isServed()) {
+            return redirect($back)->withErrors(['rating' => 'Layanan Anda belum selesai. Penilaian bisa diberikan setelah layanan selesai.']);
+        }
+
+        $data = $request->validate([
+            'rating' => ['required', 'integer', 'between:1,5'],
+            'review' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'rating.required' => 'Pilih jumlah bintang terlebih dahulu.',
+        ]);
+
+        $entry->forceFill([
+            'rating' => (int) $data['rating'],
+            'review' => filled($data['review'] ?? null) ? trim(strip_tags($data['review'])) : null,
+            'rated_at' => now(),
+        ])->save();
+
+        app(\App\Services\ActivityLogger::class)->log(
+            'guest_book.rated',
+            "Antrian {$entry->displayNumber()} ({$entry->name}) memberi penilaian {$entry->rating} bintang",
+            $entry,
+            ['rating' => $entry->rating],
+        );
+
+        return redirect($back)->with('success', 'Terima kasih atas penilaian Anda!');
     }
 
     public function monitor(): View

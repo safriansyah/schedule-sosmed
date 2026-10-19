@@ -210,7 +210,7 @@ class GuestBookController extends Controller
 
         return response()->json([
             'message' => "Antrian {$entry->displayNumber()} selesai.",
-            'entry' => $entry->fresh(['completer:id,name', 'handler:id,name', 'ticket:id,number'])->adminPayload(),
+            'entry' => $entry->fresh(['completer:id,name', 'handler:id,name', 'ticket:id,number,status'])->adminPayload(),
         ]);
     }
 
@@ -320,7 +320,7 @@ class GuestBookController extends Controller
         $base = $this->filteredQuery($request, withTab: false);
 
         $entries = $this->filteredQuery($request)
-            ->with(['ticket:id,number', 'handler:id,name', 'completer:id,name'])
+            ->with(['ticket:id,number,status', 'handler:id,name', 'completer:id,name'])
             ->limit(self::LIST_LIMIT + 1)
             ->get();
 
@@ -336,6 +336,9 @@ class GuestBookController extends Controller
                 'serving' => (clone $base)->whereIn('status', [GuestBookStatus::Called->value, GuestBookStatus::Serving->value])->count(),
                 'done' => (clone $base)->where('status', GuestBookStatus::Done->value)->count(),
                 'ticketed' => (clone $base)->where('status', GuestBookStatus::Ticketed->value)->count(),
+                // The visitors' own verdict over the same dates.
+                'rated' => (clone $base)->whereNotNull('rating')->count(),
+                'rating_avg' => (clone $base)->whereNotNull('rating')->avg('rating'),
             ],
         ];
     }

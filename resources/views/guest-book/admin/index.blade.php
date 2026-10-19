@@ -187,6 +187,34 @@
                         </a>
                     </template>
 
+                    {{-- The visitor's rating, or the link to ask for one. --}}
+                    <template x-if="entry?.rating">
+                        <div class="rounded-xl bg-amber-400/10 p-3">
+                            <p class="mb-1 text-xs text-slate-400">Penilaian tamu <span x-show="entry.rated_at" x-text="'· ' + entry.rated_at"></span></p>
+                            <p class="text-lg leading-none text-amber-400" :aria-label="entry.rating + ' dari 5 bintang'">
+                                <span x-text="'★'.repeat(entry.rating)"></span><span class="text-slate-300 dark:text-white/15" x-text="'★'.repeat(5 - entry.rating)"></span>
+                                <span class="ml-1 align-middle text-sm font-bold text-amber-700 dark:text-amber-300" x-text="entry.rating + '/5'"></span>
+                            </p>
+                            <p class="mt-2 whitespace-pre-line break-words text-sm text-slate-600 dark:text-slate-300" x-show="entry.review" x-text="'“' + entry.review + '”'"></p>
+                        </div>
+                    </template>
+
+                    <template x-if="entry?.rating_url">
+                        <div class="rounded-xl border border-amber-400/30 p-3">
+                            <p class="text-xs font-semibold text-slate-600 dark:text-slate-300">Tautan penilaian untuk tamu</p>
+                            <p class="mt-1 text-[11px] text-slate-400">Kirim ke WhatsApp tamu agar ia memberi bintang &amp; ulasan.</p>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <a :href="entry.rating_wa_url" target="_blank" rel="noopener" class="btn-success btn-sm" x-show="entry.rating_wa_url">
+                                    <x-icon name="whatsapp" class="h-3.5 w-3.5"/> Kirim via WhatsApp
+                                </a>
+                                <button type="button" class="btn-outline btn-sm"
+                                        @click="navigator.clipboard?.writeText(entry.rating_url).then(() => window.toast('Tautan penilaian disalin.'), () => window.prompt('Salin tautan ini:', entry.rating_url))">
+                                    <x-icon name="link" class="h-3.5 w-3.5"/> Salin Tautan
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+
                     <template x-if="entry?.signature_url">
                         <div>
                             <p class="mb-1 text-xs text-slate-400">Paraf</p>

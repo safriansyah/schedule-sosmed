@@ -32,6 +32,8 @@ class GuestBookEntry extends Model
             'status' => GuestBookStatus::class,
             'called_at' => 'datetime',
             'finished_at' => 'datetime',
+            'rating' => 'integer',
+            'rated_at' => 'datetime',
         ];
     }
 
@@ -123,8 +125,60 @@ class GuestBookEntry extends Model
             'ticket_url' => $this->ticket ? route('tickets.show', $this->ticket) : null,
             'signature_url' => $this->signature_path ? route('guest-book.admin.signature', $this) : null,
             'complete_url' => route('guest-book.admin.complete', $this),
+            'rating' => $this->rating,
+            'review' => $this->review,
+            'rated_at' => $this->rated_at?->timezone('Asia/Jakarta')->translatedFormat('d M Y, H:i'),
+            // Only once there is something to rate, and not after it was rated.
+            'rating_url' => $this->canBeRated() ? $this->ratingUrl() : null,
+            'rating_wa_url' => $this->canBeRated() ? $this->ratingWhatsAppUrl() : null,
             'ticket_create_url' => route('guest-book.admin.ticket', $this),
         ];
+    }
+
+    /* -----------------------------------------------------------------
+     | Rating — the visitor's stars and review
+     * ----------------------------------------------------------------- */
+
+    /**
+     * The service is over: the visit was finished at the desk, or it became a
+     * ticket and that ticket has been resolved or closed.
+     */
+    public function isServed(): bool
+    {
+        return $this->status === GuestBookStatus::Done
+            || ($this->status === GuestBookStatus::Ticketed
+                && in_array($this->ticket?->status, [\App\Enums\TicketStatus::Resolved, \App\Enums\TicketStatus::Closed], true));
+    }
+
+    public function hasRating(): bool
+    {
+        return $this->rating !== null;
+    }
+
+    /** Served, and not rated yet: rated once, never changed afterwards. */
+    public function canBeRated(): bool
+    {
+        return $this->isServed() && ! $this->hasRating();
+    }
+
+    /**
+     * The visitor's link to the rating page. Signed (they have no account,
+     * and the id alone must not open anyone's visit) and built on APP_URL,
+     * so a link made by staff on localhost still opens on the visitor's phone.
+     */
+    public function ratingUrl(): string
+    {
+        return rtrim((string) config('app.url'), '/')
+            .\Illuminate\Support\Facades\URL::signedRoute('guest-book.rate', $this, absolute: false);
+    }
+
+    /** "Kirim via WhatsApp": the link, ready to send to the visitor's number. */
+    public function ratingWhatsAppUrl(): ?string
+    {
+        $message = "Halo {$this->name}, terima kasih telah berkunjung ke layanan UT Pangkalpinang (antrian {$this->displayNumber()}). "
+            .'Mohon beri penilaian dan ulasan untuk layanan kami di tautan berikut: '.$this->ratingUrl();
+
+        return \App\Support\PhoneNumber::waLink($this->whatsapp, $message);
     }
 
     /** Entries of today's queue (WIB). */

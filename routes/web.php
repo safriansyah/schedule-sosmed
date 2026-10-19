@@ -57,6 +57,12 @@ Route::prefix('guest-book')->name('guest-book.')->group(function () {
     Route::get('/', [PublicGuestBookController::class, 'create'])->name('create');
     Route::post('/', [PublicGuestBookController::class, 'store'])->middleware('throttle:20,1')->name('store');
     Route::get('selesai', [PublicGuestBookController::class, 'done'])->name('done');
+    // The visitor's rating of their finished visit. Signed links (relative, so
+    // they hold whichever host serves them: localhost or the public domain).
+    Route::get('nilai/{entry}', [PublicGuestBookController::class, 'rate'])
+        ->middleware('signed:relative')->name('rate');
+    Route::post('nilai/{entry}', [PublicGuestBookController::class, 'storeRating'])
+        ->middleware(['signed:relative', 'throttle:10,1'])->name('rate.store');
     Route::get('monitor', [PublicGuestBookController::class, 'monitor'])->name('monitor');
     Route::get('monitor/feed', [PublicGuestBookController::class, 'feed'])->middleware('throttle:600,1')->name('monitor.feed');
 });

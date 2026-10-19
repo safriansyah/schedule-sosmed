@@ -4,12 +4,15 @@
      so a refresh never closes a form someone is filling in. --}}
 @php use App\Enums\GuestBookStatus; use App\Enums\GuestBookService; @endphp
 
-<div class="mb-4 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+<div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
     <x-stat-card label="Total" :value="number_format($counts['total'])" icon="id-card" tone="brand"/>
     <x-stat-card label="Menunggu" :value="number_format($counts['waiting'])" icon="clock" tone="amber"/>
     <x-stat-card label="Dipanggil / dilayani" :value="number_format($counts['serving'])" icon="headset" tone="cyan"/>
     <x-stat-card label="Selesai" :value="number_format($counts['done'])" icon="check-circle" tone="emerald"/>
     <x-stat-card label="Jadi tiket" :value="number_format($counts['ticketed'])" icon="file-text" tone="violet"/>
+    <x-stat-card label="Rating rata-rata" icon="star" tone="amber"
+                 :value="$counts['rated'] ? number_format((float) $counts['rating_avg'], 1, ',', '.').' / 5' : '—'"
+                 :hint="$counts['rated'] ? number_format($counts['rated']).' penilaian' : 'Belum ada penilaian'"/>
 </div>
 
 @if ($truncated)
@@ -78,6 +81,23 @@
                     </p>
                 @endif
 
+                {{-- The visitor's rating, once given. --}}
+                @if ($entry->hasRating())
+                    <div class="mt-2 rounded-xl bg-amber-400/10 px-3 py-2 text-xs">
+                        <span class="inline-flex items-center gap-0.5 align-middle" aria-label="{{ $entry->rating }} dari 5 bintang">
+                            @for ($i = 1; $i <= 5; $i++)
+                                <svg class="h-4 w-4 {{ $i <= $entry->rating ? 'text-amber-400' : 'text-slate-300 dark:text-white/15' }}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                            @endfor
+                        </span>
+                        <strong class="ml-1 align-middle text-amber-700 dark:text-amber-300">{{ $entry->rating }}/5</strong>
+                        @if ($entry->review)
+                            <p class="mt-1 line-clamp-2 whitespace-pre-line break-words text-slate-600 dark:text-slate-300">“{{ $entry->review }}”</p>
+                        @endif
+                    </div>
+                @elseif ($entry->canBeRated())
+                    <p class="mt-2 text-[11px] text-amber-600 dark:text-amber-400">Menunggu penilaian dari tamu.</p>
+                @endif
+
                 <p class="mt-2 text-[11px] text-slate-400">
                     Daftar {{ $entry->created_at->timezone('Asia/Jakarta')->format('H:i') }}
                     @if ($entry->called_at) · dipanggil {{ $entry->called_at->timezone('Asia/Jakarta')->format('H:i') }} @endif
@@ -99,6 +119,13 @@
             <button type="button" class="btn-ghost btn-sm" @click="openDetail(@js($payload))">
                 <x-icon name="eye" class="h-3.5 w-3.5"/> Detail
             </button>
+
+            @if ($payload['rating_wa_url'])
+                <a href="{{ $payload['rating_wa_url'] }}" target="_blank" rel="noopener" class="btn-outline btn-sm"
+                   title="Kirim tautan penilaian ke WhatsApp tamu">
+                    <x-icon name="star" class="h-3.5 w-3.5 text-amber-500"/> Minta Penilaian
+                </a>
+            @endif
 
             @unless ($entry->hasTicket())
                 @if ($status === GuestBookStatus::Waiting)
